@@ -1,4 +1,123 @@
 {
   "schemaVersion": 1,
-  "snapshots": []
+  "snapshots": [
+    {
+      "generatedAt": "2026-11-03",
+      "matched": 263,
+      "medianPrice": 237500,
+      "medianPricePerM2": 2420,
+      "firstYear": 2021,
+      "lastYear": 2025,
+      "years": [
+        2021,
+        2022,
+        2023,
+        2024,
+        2025
+      ],
+      "coverage": [
+        {
+          "department": "63",
+          "years": [
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ]
+        },
+        {
+          "department": "03",
+          "years": [
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ]
+        },
+        {
+          "department": "15",
+          "years": [
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ]
+        },
+        {
+          "department": "19",
+          "years": [
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ]
+        },
+        {
+          "department": "23",
+          "years": [
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ]
+        },
+        {
+          "department": "42",
+          "years": [
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ]
+        },
+        {
+          "department": "43",
+          "years": [
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ]
+        }
+      ],
+      "filters": {
+        "livingArea": [
+          85.0,
+          125.0
+        ],
+        "rooms": [
+          4.0,
+          6.0
+        ],
+        "landArea": [
+          300.0,
+          1200.0
+        ],
+        "constructionYear": [
+          1963,
+          1983
+        ],
+        "dpe": "D"
+      },
+      "scope": {
+        "cityCode": "63124",
+        "departments": [
+          "63",
+          "03",
+          "15",
+          "19",
+          "23",
+          "42",
+          "43"
+        ]
+      }
+    }
+  ]
 }
