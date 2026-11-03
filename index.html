@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f6f2" />
+    <title>Maison & Marché — suivi immobilier</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="./src/styles.css" />
+    <script src="./config.local.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+      defer
+    ></script>
+    <script type="module" src="./src/main.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Maison & Marché, accueil">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <path d="M4 15.2 16 5l12 10.2v12.3H4V15.2Z" />
+              <path d="M12 27.5v-8h8v8M4 15.2l12 10.1 12-10.1" />
+            </svg>
+          </span>
+          <span>maison<span class="brand-amp">&</span>marché</span>
+        </a>
+
+        <div class="topbar-right">
+          <div class="location-pill">
+            <span class="location-dot"></span>
+            <span id="location-label">Cournon-d'Auvergne</span>
+            <span class="location-divider"></span>
+            <span>20 km</span>
+          </div>
+          <button class="icon-button" id="settings-button" type="button" aria-label="Configurer la localisation" title="Configurer la localisation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" /><path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z" /></svg>
+          </button>
+          <div class="avatar" aria-label="Profil">M</div>
+        </div>
+      </header>
+
+      <main class="page">
+        <nav class="app-tabs" role="tablist" aria-label="Vues du tableau de bord">
+          <button class="app-tab active" id="dashboard-tab" type="button" role="tab" aria-controls="dashboard-view" aria-selected="true">Vue d'ensemble</button>
+          <button class="app-tab" id="transactions-tab" type="button" role="tab" aria-controls="transactions-view" aria-selected="false">Transactions comparables</button>
+        </nav>
+        <div id="dashboard-view" role="tabpanel" tabindex="0" aria-labelledby="dashboard-tab">
+        <section class="page-heading">
+          <div>
+            <p class="eyebrow">VOTRE PATRIMOINE, EN UN COUP D'ŒIL</p>
+            <h1>La valeur de votre quartier,<br class="mobile-break" /> sans deviner.</h1>
+            <p class="heading-copy">Les ventes réelles autour de chez vous, pour mieux comprendre le marché.</p>
+          </div>
+          <div class="updated">
+            <span class="live-dot"></span>
+            <span id="updated-label">Connexion aux données DVF…</span>
+          </div>
+        </section>
+
+        <section class="market-banner" aria-label="Indicateur du marché">
+          <div class="banner-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 17.5 9 11l4 4 8-9M15 6h6v6" /></svg>
+          </div>
+          <div class="banner-main">
+            <span class="banner-label">MARCHÉ LOCAL · 20 KM</span>
+            <div class="banner-value-row">
+              <strong id="headline-price">—</strong>
+              <span class="unit">€/m² estimés</span>
+              <span class="trend-chip" id="headline-change">—</span>
+            </div>
+          </div>
+          <div class="banner-separator"></div>
+          <div class="banner-note">
+            <span class="banner-note-number" id="headline-volume">—</span>
+            <span>ventes observées<br />dans la période DVF disponible</span>
+          </div>
+          <div class="banner-decoration" aria-hidden="true">
+            <svg viewBox="0 0 250 92" preserveAspectRatio="none">
+              <path d="M0 75C32 74 40 56 70 60s37-30 70-24 44 20 68-4 30-18 42-18" />
+              <path class="area" d="M0 75C32 74 40 56 70 60s37-30 70-24 44 20 68-4 30-18 42-18v78H0Z" />
+            </svg>
+          </div>
+        </section>
+
+        <section class="property-profile panel" aria-labelledby="property-heading">
+          <div class="property-profile-header">
+            <div class="property-profile-title">
+              <span class="property-home-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10H3V10Z" /><path d="M9 20v-6h6v6" /></svg>
+              </span>
+              <div>
+                <p class="panel-kicker">VOTRE BIEN · PROFIL DE RÉFÉRENCE</p>
+                <h2 id="property-heading">Ma maison</h2>
+              </div>
+            </div>
+            <button class="edit-property-button" id="edit-property-button" type="button">Modifier</button>
+          </div>
+          <div class="property-profile-content">
+            <div class="property-specs" aria-label="Caractéristiques de votre maison">
+              <div class="property-spec"><strong id="profile-living-area">—</strong><span>m² habitables</span></div>
+              <div class="property-spec"><strong id="profile-rooms">—</strong><span>pièces</span></div>
+              <div class="property-spec"><strong id="profile-land-area">—</strong><span>m² de terrain</span></div>
+              <div class="property-spec"><strong id="profile-garage-area">—</strong><span>m² de garage</span></div>
+              <div class="property-spec energy-spec"><strong id="profile-energy">—</strong><span>DPE</span></div>
+            </div>
+            <div class="property-estimate">
+              <span>Repère indicatif DVF · maison</span>
+              <strong id="property-value">—</strong>
+              <small id="property-estimate-detail">Chargement du prix DVF local…</small>
+            </div>
+          </div>
+          <div class="purchase-comparison">
+            <div>
+              <span class="purchase-label">Votre prix d'achat</span>
+              <strong id="purchase-price">—</strong>
+              <small id="purchase-date">—</small>
+            </div>
+            <div class="purchase-difference">
+              <span class="purchase-label">Écart indicatif avec le repère DVF</span>
+              <strong id="purchase-difference">—</strong>
+              <small id="purchase-difference-percent">—</small>
+            </div>
+          </div>
+          <p class="property-estimate-note">Comparaison indicative : le repère DVF applique un prix moyen au m² à la surface habitable, sans ajustement pour le DPE, le garage, le terrain, les frais d'achat ou les travaux. Ce n'est pas une plus-value réalisée ni une estimation notariale.</p>
+        </section>
+
+        <section class="panel comparables-panel" aria-labelledby="comparables-heading">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">VENTES QUI RESSEMBLENT À VOTRE MAISON</p>
+              <h2 id="comparables-heading">Des comparables plus précis</h2>
+              <p class="panel-description">Maisons vendues à moins de 20 km, filtrées par leurs caractéristiques connues.</p>
+            </div>
+            <button class="primary-button compare-button" id="compare-button" type="button">Actualiser les comparables</button>
+          </div>
+          <div class="comparable-filters" aria-label="Filtres des ventes comparables">
+            <label>
+              <span>Surface habitable</span>
+              <span class="filter-range">
+                <input id="filter-min-area" aria-label="Surface minimale en mètres carrés" type="number" min="20" max="1000" value="85" />
+                <span>à</span>
+                <input id="filter-max-area" aria-label="Surface maximale en mètres carrés" type="number" min="20" max="1000" value="125" />
+                <span>m²</span>
+              </span>
+            </label>
+            <label>
+              <span>Nombre de pièces</span>
+              <span class="filter-range">
+                <input id="filter-min-rooms" aria-label="Nombre minimal de pièces" type="number" min="1" max="30" value="4" />
+                <span>à</span>
+                <input id="filter-max-rooms" aria-label="Nombre maximal de pièces" type="number" min="1" max="30" value="6" />
+                <span>pièces</span>
+              </span>
+            </label>
+            <label>
+              <span>Terrain (si renseigné dans la vente)</span>
+              <span class="filter-range">
+                <input id="filter-min-land" aria-label="Surface minimale de terrain en mètres carrés" type="number" min="0" max="100000" value="300" />
+                <span>à</span>
+                <input id="filter-max-land" aria-label="Surface maximale de terrain en mètres carrés" type="number" min="0" max="100000" value="1200" />
+                <span>m²</span>
+              </span>
+            </label>
+            <label>
+              <span>Classe DPE du bâtiment associé</span>
+              <select id="filter-dpe" aria-label="Filtrer par classe DPE">
+                <option value="all">Toutes les classes</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+                <option value="E">E</option>
+                <option value="F">F</option>
+                <option value="G">G</option>
+              </select>
+            </label>
+          </div>
+          <div class="dpe-context">
+            <span class="dpe-context-grade" id="comparable-dpe">D</span>
+            <p><strong>Le filtre DPE s'appuie sur le bâtiment associé à la parcelle.</strong> Le serveur rapproche localement les tables DPE et bâtiment/parcelle de la BDNB ; seules les parcelles avec une classe unique sont retenues. Au premier usage, il récupère les tables nécessaires de l'export départemental (environ 33 Mo compressés par département) et conserve un index SQLite local, réutilisé après redémarrage et actualisé après 90 jours. Les candidats sont comparés localement, jusqu'à 10&nbsp;000 parcelles. Le DPE peut ne pas décrire le logement vendu ni son état à la date de vente.</p>
+          </div>
+          <p class="comparables-status" id="comparables-status" role="status">Chargement des ventes détaillées des archives DVF disponibles…</p>
+          <button class="secondary-button expand-sample-button" id="expand-sample-button" type="button" hidden>Vérifier les parcelles suivantes</button>
+          <div class="comparables-results" id="comparables-results" aria-live="polite"></div>
+          <div class="comparable-estimate" id="comparable-estimate" hidden aria-live="polite"></div>
+          <section class="annual-comparables" id="annual-comparables" hidden aria-labelledby="annual-comparables-heading">
+            <div class="annual-comparables-heading">
+              <div>
+                <h3 id="annual-comparables-heading">Évolution annuelle des comparables</h3>
+                <p>Prix médians des ventes détaillées, selon la classe DPE sélectionnée.</p>
+              </div>
+            </div>
+            <div class="annual-comparables-table-wrap">
+              <table class="annual-comparables-table">
+                <thead><tr><th scope="col">Année</th><th scope="col">Ventes</th><th scope="col">Prix médian</th><th scope="col">Prix médian au m²</th></tr></thead>
+                <tbody id="annual-comparables-body"></tbody>
+              </table>
+            </div>
+          </section>
+          <p class="comparables-disclaimer">Les ventes multi-biens ou ambiguës sont exclues ; au moins 5 ventes correspondantes sont nécessaires. Les archives DVF géolocalisées peuvent être publiées avec retard par rapport aux indicateurs DVF agrégés ; la période effectivement disponible est indiquée dans les résultats.</p>
+        </section>
+
+        <section class="metrics-grid" aria-label="Indicateurs immobiliers">
+          <article class="metric-card">
+            <div class="metric-top">
+              <span class="metric-icon house-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10H3V10Z" /><path d="M9 20v-6h6v6" /></svg>
+              </span>
+              <span class="metric-period">PÉRIODE DVF</span>
+            </div>
+            <p class="metric-label">Maisons</p>
+            <div class="metric-bottom"><strong id="house-price">—</strong><span>€/m²</span></div>
+            <p class="metric-foot"><span id="house-sales">—</span> ventes retenues</p>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top">
+              <span class="metric-icon apartment-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M5 21V4h14v17M3 21h18M9 8h2m2 0h2m-6 4h2m2 0h2m-6 4h2m2 0h2" /><path d="M10 21v-3h4v3" /></svg>
+              </span>
+              <span class="metric-period">PÉRIODE DVF</span>
+            </div>
+            <p class="metric-label">Appartements</p>
+            <div class="metric-bottom"><strong id="apartment-price">—</strong><span>€/m²</span></div>
+            <p class="metric-foot"><span id="apartment-sales">—</span> ventes retenues</p>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top">
+              <span class="metric-icon transaction-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h17M8 15l4-4 3 2 5-6" /><path d="M16 7h4v4" /></svg>
+              </span>
+              <span class="metric-period">PÉRIODE DVF</span>
+            </div>
+            <p class="metric-label">Ventes DVF</p>
+            <div class="metric-bottom"><strong id="total-sales">—</strong><span>transactions</span></div>
+            <p class="metric-foot">Maisons et appartements</p>
+          </article>
+          <article class="metric-card listing-metric">
+            <div class="metric-top">
+              <span class="metric-icon listing-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8m-8 4h8m-8 4h5" /></svg>
+              </span>
+              <span class="metric-period">VOTRE SUIVI</span>
+            </div>
+            <p class="metric-label">Annonces suivies</p>
+            <div class="metric-bottom"><strong id="listing-count">0</strong><span>offres</span></div>
+            <p class="metric-foot">Saisie manuelle, sans scraping</p>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel chart-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">ÉVOLUTION DES PRIX</p>
+                <h2>Un marché qui se dessine</h2>
+                <p class="panel-description">Évolution des ventes dans la commune de votre maison</p>
+              </div>
+              <label class="select-wrap">
+                <span class="sr-only">Type de bien pour le graphique</span>
+                <select id="property-type">
+                  <option value="house" selected>Maisons</option>
+                  <option value="all">Tous les biens</option>
+                  <option value="apartment">Appartements</option>
+                </select>
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+              </label>
+            </div>
+            <div class="chart-summary">
+              <span class="chart-dot"></span>
+              <span id="chart-range">Données disponibles en cours de chargement</span>
+            </div>
+            <div class="chart-wrap" id="price-chart" role="img" aria-label="Évolution du prix de vente moyen estimé"></div>
+            <div class="chart-axis" id="chart-axis"></div>
+          </article>
+
+          <article class="panel map-panel">
+            <div class="panel-header map-header">
+              <div>
+                <p class="panel-kicker">VOTRE ZONE DE VEILLE</p>
+                <h2>Autour de la maison</h2>
+              </div>
+              <span class="radius-badge">20 km</span>
+            </div>
+            <div class="map-frame">
+              <div id="map" aria-label="Carte des communes du rayon de 20 kilomètres"></div>
+              <div class="map-legend"><span class="legend-home"></span>Votre maison <span class="legend-sales"></span>Prix au m²</div>
+              <div class="map-message" id="map-message" hidden></div>
+            </div>
+            <div class="map-footer">
+              <span><strong id="town-count">—</strong> communes dans la zone</span>
+              <span class="map-method">Centres des communes · période DVF</span>
+            </div>
+          </article>
+        </section>
+
+        <section class="content-grid lower-grid">
+          <article class="panel area-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">REPÈRES LOCAUX</p>
+                <h2>Communes les plus proches</h2>
+              </div>
+              <span class="subtle-label">période DVF disponible</span>
+            </div>
+            <div class="town-list" id="town-list">
+              <p class="loading-row">Chargement des données communales…</p>
+            </div>
+          </article>
+
+          <article class="panel listings-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">ANNONCES DU MARCHÉ</p>
+                <h2>À l'achat ou à la vente</h2>
+              </div>
+              <button class="add-button" id="add-listing-button" type="button" aria-label="Ajouter une annonce">+</button>
+            </div>
+            <div class="source-notice">
+              <span class="notice-icon" aria-hidden="true">i</span>
+              <p>Les annonces en ligne n'ont pas de flux public gratuit fiable. Ajoutez ici les offres que vous souhaitez suivre, sans collecte automatique des portails.</p>
+            </div>
+            <div class="listing-list" id="listing-list"></div>
+            <button class="text-button" id="add-listing-link" type="button">+ Ajouter une annonce à suivre</button>
+            <div class="data-backup-actions">
+              <button class="text-button" id="export-data-button" type="button">Sauvegarder profil et annonces</button>
+              <button class="text-button" id="import-data-button" type="button">Restaurer une sauvegarde</button>
+              <input id="import-data-file" type="file" accept="application/json,.json" hidden />
+            </div>
+            <p class="backup-status" id="backup-status" role="status"></p>
+          </article>
+        </section>
+        </div>
+
+        <section class="panel transactions-view" id="transactions-view" role="tabpanel" tabindex="0" aria-labelledby="transactions-tab transactions-heading" hidden>
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">VENTES DVF · COMPARABLES</p>
+              <h2 id="transactions-heading">Transactions comparables</h2>
+              <p class="panel-description">Maisons filtrées selon vos critères et le DPE du bâtiment associé à la parcelle.</p>
+            </div>
+            <button class="primary-button compare-button" id="refresh-transactions-button" type="button">Actualiser</button>
+          </div>
+          <p class="transactions-status" id="transactions-status" role="status">Chargement des transactions comparables…</p>
+          <button class="secondary-button expand-sample-button" id="expand-transactions-button" type="button" hidden>Vérifier les parcelles suivantes</button>
+          <div class="transactions-toolbar">
+            <label for="transactions-year-filter">Année
+              <select id="transactions-year-filter"><option value="all">Toutes</option></select>
+            </label>
+            <label for="transactions-sort">Trier par
+              <select id="transactions-sort">
+                <option value="date-desc">Date · récent</option>
+                <option value="date-asc">Date · ancien</option>
+                <option value="price-desc">Prix · décroissant</option>
+                <option value="price-asc">Prix · croissant</option>
+                <option value="area-desc">Surface · décroissante</option>
+                <option value="area-asc">Surface · croissante</option>
+                <option value="land-desc">Terrain · décroissant</option>
+                <option value="land-asc">Terrain · croissant</option>
+              </select>
+            </label>
+            <button class="secondary-button" id="export-transactions-button" type="button" disabled>Exporter en CSV</button>
+          </div>
+          <section class="transaction-map-panel" aria-labelledby="transaction-map-heading">
+            <div class="transaction-map-heading">
+              <h3 id="transaction-map-heading">Localisation des ventes comparables</h3>
+              <span id="transaction-map-count" role="status">Chargement de la carte…</span>
+            </div>
+            <div id="transaction-map" aria-label="Carte des ventes comparables géolocalisées"></div>
+            <p class="transaction-map-note">Les points reflètent les coordonnées publiées avec les données DVF et ne dessinent pas les limites cadastrales. Cliquez sur un point pour ouvrir la parcelle dans l’explorateur officiel.</p>
+          </section>
+          <div class="transactions-table-wrap">
+            <table class="transactions-table">
+              <thead>
+                <tr>
+                  <th scope="col">Date de vente</th>
+                  <th scope="col">Prix DVF</th>
+                  <th scope="col">Surface habitable</th>
+                  <th scope="col">Terrain</th>
+                  <th scope="col">Pièces</th>
+                  <th scope="col">Prix au m²</th>
+                  <th scope="col">DPE associé</th>
+                  <th scope="col">Parcelle cadastrale</th>
+                </tr>
+              </thead>
+              <tbody id="transactions-table-body">
+                <tr><td colspan="8">En attente du chargement DVF.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="comparables-disclaimer">Les lignes affichées sont les mutations DVF retenues dans l’échantillon des parcelles vérifiées. Le DPE est celui du bâtiment associé, pas nécessairement celui du logement vendu à la date de mutation.</p>
+        </section>
+
+        <footer class="footer">
+          <span>Données de ventes : <a href="https://explore.data.gouv.fr/immobilier" target="_blank" rel="noreferrer">DVF · DGFiP</a></span>
+          <span>Mis à jour par la source officielle · ventes conclues, pas les prix affichés</span>
+          <span>Carte © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a></span>
+        </footer>
+      </main>
+    </div>
+
+    <dialog class="modal" id="location-dialog">
+      <form class="modal-card" id="location-form">
+        <button class="modal-close" type="button" data-close="location-dialog" aria-label="Fermer">×</button>
+        <p class="panel-kicker">VOTRE LOCALISATION</p>
+        <h2>Où se trouve votre maison ?</h2>
+        <p class="modal-copy">L'adresse sera envoyée à la Base Adresse Nationale pour obtenir ses coordonnées. Seules les coordonnées et le nom de la commune seront enregistrés dans ce navigateur.</p>
+        <label class="field-label" for="address-input">Adresse</label>
+        <div class="address-row">
+          <input id="address-input" name="address" autocomplete="street-address" placeholder="Adresse, code postal, commune" required />
+          <button class="primary-button" type="submit">Localiser</button>
+        </div>
+        <p class="form-message" id="location-message" role="status"></p>
+        <button class="text-button modal-secondary" type="button" data-close="location-dialog">Annuler</button>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="property-dialog">
+      <form class="modal-card" id="property-form">
+        <button class="modal-close" type="button" data-close="property-dialog" aria-label="Fermer">×</button>
+        <p class="panel-kicker">PROFIL DE RÉFÉRENCE</p>
+        <h2>Les caractéristiques de votre maison</h2>
+        <p class="modal-copy">Ces informations servent à personnaliser votre tableau de bord et restent enregistrées uniquement dans ce navigateur.</p>
+        <div class="form-row">
+          <div>
+            <label class="field-label" for="property-living-area">Surface habitable (m²)</label>
+            <input id="property-living-area" name="livingArea" type="number" min="1" step="1" required />
+          </div>
+          <div>
+            <label class="field-label" for="property-rooms">Nombre de pièces</label>
+            <input id="property-rooms" name="rooms" type="number" min="1" step="1" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label class="field-label" for="property-land-area">Surface du terrain (m²)</label>
+            <input id="property-land-area" name="landArea" type="number" min="0" step="1" required />
+          </div>
+          <div>
+            <label class="field-label" for="property-garage-area">Surface du garage (m²)</label>
+            <input id="property-garage-area" name="garageArea" type="number" min="0" step="1" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label class="field-label" for="property-purchase-price">Prix d'achat (€)</label>
+            <input id="property-purchase-price" name="purchasePrice" type="number" min="1" step="1" required />
+          </div>
+          <div>
+            <label class="field-label" for="property-purchase-date">Date d'achat</label>
+            <input id="property-purchase-date" name="purchaseDate" type="date" required />
+          </div>
+        </div>
+        <label class="field-label" for="property-energy">DPE</label>
+        <select id="property-energy" name="energyRating">
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+          <option value="D">D</option><option value="E">E</option><option value="F">F</option>
+          <option value="G">G</option><option value="Inconnu">Inconnu</option>
+        </select>
+        <p class="form-message" id="property-message" role="alert"></p>
+        <button class="primary-button submit-button" type="submit">Enregistrer mon profil</button>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="listing-dialog">
+      <form class="modal-card" id="listing-form">
+        <button class="modal-close" type="button" data-close="listing-dialog" aria-label="Fermer">×</button>
+        <p class="panel-kicker">SUIVI PERSONNEL</p>
+        <h2>Ajouter une annonce</h2>
+        <p class="modal-copy">Enregistrez une offre que vous avez trouvée. Elle reste uniquement dans le stockage local de ce navigateur.</p>
+        <label class="field-label" for="listing-title">Titre de l'annonce</label>
+        <input id="listing-title" name="title" placeholder="Ex. Maison avec jardin à Cournon" required maxlength="100" />
+        <div class="form-row">
+          <div>
+            <label class="field-label" for="listing-price">Prix affiché (€)</label>
+            <input id="listing-price" name="price" type="number" min="1" step="1" placeholder="245000" required />
+          </div>
+          <div>
+            <label class="field-label" for="listing-area">Surface (m²)</label>
+            <input id="listing-area" name="area" type="number" min="1" step="1" placeholder="95" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label class="field-label" for="listing-kind">Type de bien</label>
+            <select id="listing-kind" name="kind">
+              <option value="Maison">Maison</option>
+              <option value="Appartement">Appartement</option>
+              <option value="Terrain">Terrain</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="listing-intent">Votre suivi</label>
+            <select id="listing-intent" name="intent">
+              <option value="À acheter">À acheter</option>
+              <option value="À vendre">À vendre</option>
+            </select>
+          </div>
+        </div>
+        <label class="field-label" for="listing-status">Statut de suivi</label>
+        <select id="listing-status" name="status">
+          <option value="À suivre">À suivre</option>
+          <option value="Contact pris">Contact pris</option>
+          <option value="Visite prévue">Visite prévue</option>
+          <option value="Offre en cours">Offre en cours</option>
+          <option value="Clôturée">Clôturée</option>
+        </select>
+        <label class="field-label" for="listing-url">Lien vers l'annonce</label>
+        <input id="listing-url" name="url" type="url" placeholder="https://…" required />
+        <p class="form-message" id="listing-message" role="alert"></p>
+        <button class="primary-button submit-button" type="submit">Enregistrer l'annonce</button>
+      </form>
+    </dialog>
+  </body>
+</html>
