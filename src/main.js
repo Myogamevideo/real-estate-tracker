@@ -93,7 +93,9 @@ const elements = {
   propertyDialog: document.querySelector("#property-dialog"),
 };
 
-let home = readSavedLocation() ?? window.LOCAL_HOME ?? DEFAULT_HOME;
+let home = window.STATIC_DATA_MODE
+  ? window.LOCAL_HOME ?? DEFAULT_HOME
+  : readSavedLocation() ?? window.LOCAL_HOME ?? DEFAULT_HOME;
 let property = readSavedProperty() ?? window.LOCAL_HOME?.property ?? DEFAULT_PROPERTY;
 let marketData = [];
 let nearbyCommunes = [];
@@ -164,8 +166,19 @@ document.querySelector("#property-purchase-date").value = property.purchaseDate;
 document.querySelector("#property-energy").value = property.energyRating;
 renderPropertyProfile();
 updateComparableFilterDefaults();
+configureStaticComparableFilters();
 renderListings();
 loadMarketData();
+if (window.STATIC_DATA_MODE) {
+  document.querySelector("#dpe-context-description").textContent =
+    "Cette version publique charge un instantané calculé chaque semaine par GitHub Actions. " +
+    "Les critères sont fixes pour ce jeu de données ; les lignes détaillées, identifiants cadastraux et coordonnées DVF publiés sont accessibles à tous. " +
+    "Le DPE décrit le bâtiment associé et peut ne pas correspondre exactement au logement vendu à la date de mutation.";
+  elements.compareButton.textContent = "Recharger l'instantané";
+  const settingsButton = document.querySelector("#settings-button");
+  settingsButton.disabled = true;
+  settingsButton.title = "La localisation de cet instantané public est fixe.";
+}
 
 function readSavedLocation() {
   try {
@@ -472,6 +485,26 @@ function updateComparableFilterDefaults() {
   elements.comparableDpeFilter.value = "ABCDEFG".includes(property.energyRating)
     ? property.energyRating
     : "all";
+  configureStaticComparableFilters();
+}
+
+function configureStaticComparableFilters(filters = window.STATIC_COMPARABLE_FILTERS) {
+  if (!window.STATIC_DATA_MODE || !filters) return;
+  const values = {
+    "#filter-min-area": filters.minArea,
+    "#filter-max-area": filters.maxArea,
+    "#filter-min-rooms": filters.minRooms,
+    "#filter-max-rooms": filters.maxRooms,
+    "#filter-min-land": filters.minLand,
+    "#filter-max-land": filters.maxLand,
+  };
+  for (const [selector, value] of Object.entries(values)) {
+    const input = document.querySelector(selector);
+    input.value = value;
+    input.disabled = true;
+  }
+  elements.comparableDpeFilter.value = filters.dpe;
+  elements.comparableDpeFilter.disabled = true;
 }
 
 function handlePropertySubmit(event) {
@@ -562,7 +595,21 @@ async function loadComparables({ expandDpeSample = false } = {}) {
   }
 
   try {
-    const response = await fetchJson(`/api/dvf-comparables?${params}`, 180000);
+    const response = await fetchJson(
+      window.STATIC_DATA_MODE ? "./data/comparables.json" : `/api/dvf-comparables?${params}`,
+      180000,
+    );
+    if (window.STATIC_DATA_MODE && response.filters) {
+      configureStaticComparableFilters({
+        minArea: response.filters.livingArea[0],
+        maxArea: response.filters.livingArea[1],
+        minRooms: response.filters.rooms[0],
+        maxRooms: response.filters.rooms[1],
+        minLand: response.filters.landArea[0],
+        maxLand: response.filters.landArea[1],
+        dpe: response.filters.dpe ?? "all",
+      });
+    }
     const { summary } = response;
     dpeLookupLimit = requestedDpeLookupLimit;
     eligibleDpeParcels = summary.dpeSample
@@ -592,6 +639,7 @@ async function loadComparables({ expandDpeSample = false } = {}) {
     }
 
     elements.comparablesStatus.textContent =
+      `${window.STATIC_DATA_MODE && response.generatedAt ? `Instantané public du ${formatDate(response.generatedAt)} · ` : ""}` +
       `${coverageNotice}${formatNumber(summary.matched)} ventes de maisons comparables` +
       `${params.get("dpe") === "all" ? "" : ` avec un DPE ${params.get("dpe")}`}` +
       `${dpeSampleLabel} · ${response.firstYear}–${response.lastYear}`;
@@ -628,7 +676,9 @@ async function loadComparables({ expandDpeSample = false } = {}) {
     console.error("Le chargement des comparables DVF a échoué.", error);
     const errorMessage =
       error.message.includes("404") || error.message.includes("Failed to fetch")
-        ? "Pour charger les ventes détaillées, démarrez l'application avec « python3 server.py »."
+        ? window.STATIC_DATA_MODE
+          ? "L'instantané public n'est pas disponible ; vérifiez que le déploiement GitHub Pages a réussi."
+          : "Pour charger les ventes détaillées, démarrez l'application avec « python3 server.py »."
         : `Les ventes détaillées n'ont pas pu être chargées : ${error.message}`;
     const requestError = expandDpeSample
       ? `${errorMessage} L'échantillon précédent reste affiché ; réessayez le lot.`

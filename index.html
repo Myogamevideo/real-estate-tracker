@@ -12,6 +12,7 @@
       crossorigin=""
     />
     <link rel="stylesheet" href="./src/styles.css" />
+    <script src="./static-config.js"></script>
     <script src="./config.local.js"></script>
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -186,7 +187,7 @@
           </div>
           <div class="dpe-context">
             <span class="dpe-context-grade" id="comparable-dpe">D</span>
-            <p><strong>Le filtre DPE s'appuie sur le bâtiment associé à la parcelle.</strong> Le serveur rapproche localement les tables DPE et bâtiment/parcelle de la BDNB ; seules les parcelles avec une classe unique sont retenues. Au premier usage, il récupère les tables nécessaires de l'export départemental (environ 33 Mo compressés par département) et conserve un index SQLite local, réutilisé après redémarrage et actualisé après 90 jours. Les candidats sont comparés localement, jusqu'à 10&nbsp;000 parcelles. Le DPE peut ne pas décrire le logement vendu ni son état à la date de vente.</p>
+            <p id="dpe-context-description"><strong>Le filtre DPE s'appuie sur le bâtiment associé à la parcelle.</strong> Le serveur rapproche localement les tables DPE et bâtiment/parcelle de la BDNB ; seules les parcelles avec une classe unique sont retenues. Au premier usage, il récupère les tables nécessaires de l'export départemental (environ 33 Mo compressés par département) et conserve un index SQLite local, réutilisé après redémarrage et actualisé après 90 jours. Les candidats sont comparés localement, jusqu'à 10&nbsp;000 parcelles. Le DPE peut ne pas décrire le logement vendu ni son état à la date de vente.</p>
           </div>
           <p class="comparables-status" id="comparables-status" role="status">Chargement des ventes détaillées des archives DVF disponibles…</p>
           <button class="secondary-button expand-sample-button" id="expand-sample-button" type="button" hidden>Vérifier les parcelles suivantes</button>

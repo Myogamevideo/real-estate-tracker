@@ -1,0 +1,81 @@
+name: Publish scheduled real estate snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/deploy-pages.yml"
+      - "index.html"
+      - "server.py"
+      - "src/**"
+      - "scripts/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore BDNB index cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/bdnb-dpe.sqlite3
+          key: bdnb-${{ runner.os }}-${{ vars.BDNB_VERSION || '2026-02-b' }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            bdnb-${{ runner.os }}-${{ vars.BDNB_VERSION || '2026-02-b' }}-
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Generate the static site and weekly snapshot
+        env:
+          HOME_LATITUDE: ${{ secrets.HOME_LATITUDE }}
+          HOME_LONGITUDE: ${{ secrets.HOME_LONGITUDE }}
+          HOME_CITY_CODE: ${{ vars.HOME_CITY_CODE }}
+          HOME_DEPARTMENT_CODE: ${{ vars.HOME_DEPARTMENT_CODE }}
+          HOME_DEPARTMENTS: ${{ vars.HOME_DEPARTMENTS }}
+          COMPARABLE_MIN_AREA: ${{ vars.COMPARABLE_MIN_AREA || '85' }}
+          COMPARABLE_MAX_AREA: ${{ vars.COMPARABLE_MAX_AREA || '125' }}
+          COMPARABLE_MIN_ROOMS: ${{ vars.COMPARABLE_MIN_ROOMS || '4' }}
+          COMPARABLE_MAX_ROOMS: ${{ vars.COMPARABLE_MAX_ROOMS || '6' }}
+          COMPARABLE_MIN_LAND: ${{ vars.COMPARABLE_MIN_LAND || '300' }}
+          COMPARABLE_MAX_LAND: ${{ vars.COMPARABLE_MAX_LAND || '1200' }}
+          COMPARABLE_DPE: ${{ vars.COMPARABLE_DPE || 'D' }}
+          BDNB_VERSION: ${{ vars.BDNB_VERSION || '2026-02-b' }}
+        run: python scripts/generate_pages_data.py
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
