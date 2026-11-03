@@ -87,6 +87,8 @@ a { color: inherit; }
   background: #fff;
 }
 
+.icon-button:disabled { opacity: .55; cursor: not-allowed; }
+
 .icon-button svg { width: 17px; fill: none; stroke: #65726b; stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round; }
 .avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #dce8df; color: #3c634f; font-size: 13px; font-weight: 700; }
 
