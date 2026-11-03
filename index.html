@@ -111,6 +111,7 @@
               <div class="property-spec"><strong id="profile-rooms">—</strong><span>pièces</span></div>
               <div class="property-spec"><strong id="profile-land-area">—</strong><span>m² de terrain</span></div>
               <div class="property-spec"><strong id="profile-garage-area">—</strong><span>m² de garage</span></div>
+              <div class="property-spec"><strong id="profile-construction-year">—</strong><span>année de construction</span></div>
               <div class="property-spec energy-spec"><strong id="profile-energy">—</strong><span>DPE</span></div>
             </div>
             <div class="property-estimate">
@@ -172,6 +173,14 @@
               </span>
             </label>
             <label>
+              <span>Année de construction (BDNB)</span>
+              <span class="filter-range">
+                <input id="filter-min-construction-year" aria-label="Année minimale de construction" type="number" min="1600" value="1963" />
+                <span>à</span>
+                <input id="filter-max-construction-year" aria-label="Année maximale de construction" type="number" min="1600" value="1983" />
+              </span>
+            </label>
+            <label>
               <span>Classe DPE du bâtiment associé</span>
               <select id="filter-dpe" aria-label="Filtrer par classe DPE">
                 <option value="all">Toutes les classes</option>
@@ -187,9 +196,26 @@
           </div>
           <div class="dpe-context">
             <span class="dpe-context-grade" id="comparable-dpe">D</span>
-            <p id="dpe-context-description"><strong>Le filtre DPE s'appuie sur le bâtiment associé à la parcelle.</strong> Le serveur rapproche localement les tables DPE et bâtiment/parcelle de la BDNB ; seules les parcelles avec une classe unique sont retenues. Au premier usage, il récupère les tables nécessaires de l'export départemental (environ 33 Mo compressés par département) et conserve un index SQLite local, réutilisé après redémarrage et actualisé après 90 jours. Les candidats sont comparés localement, jusqu'à 10&nbsp;000 parcelles. Le DPE peut ne pas décrire le logement vendu ni son état à la date de vente.</p>
+            <p id="dpe-context-description"><strong>Le DPE et l'année de construction proviennent du bâtiment associé à la parcelle dans la BDNB.</strong> Les années inconnues ne correspondent pas au filtre de construction. Au premier usage, le serveur récupère les tables nécessaires de l'export départemental et conserve un index SQLite local, réutilisé après redémarrage et actualisé après 90 jours. Jusqu'à 10&nbsp;000 parcelles candidates sont vérifiées. Le DPE et l'année peuvent ne pas décrire exactement le logement vendu ni son état à la date de vente.</p>
           </div>
           <p class="comparables-status" id="comparables-status" role="status">Chargement des ventes détaillées des archives DVF disponibles…</p>
+          <section class="dvf-coverage" id="dvf-coverage" hidden aria-labelledby="dvf-coverage-heading">
+            <h3 id="dvf-coverage-heading">Fraîcheur et couverture DVF</h3>
+            <p id="dvf-coverage-details"></p>
+          </section>
+          <section class="snapshot-history" id="snapshot-history" hidden aria-labelledby="snapshot-history-heading">
+            <div class="snapshot-history-heading">
+              <div>
+                <h3 id="snapshot-history-heading">Historique des instantanés</h3>
+                <p>Évolution hebdomadaire des prix médians et du nombre de comparables.</p>
+              </div>
+            </div>
+            <div class="snapshot-history-charts">
+              <div><strong>Prix médian</strong><div id="snapshot-price-chart" class="snapshot-sparkline"></div></div>
+              <div><strong>Ventes comparables</strong><div id="snapshot-count-chart" class="snapshot-sparkline"></div></div>
+            </div>
+            <p id="snapshot-history-note" class="snapshot-history-note"></p>
+          </section>
           <button class="secondary-button expand-sample-button" id="expand-sample-button" type="button" hidden>Vérifier les parcelles suivantes</button>
           <div class="comparables-results" id="comparables-results" aria-live="polite"></div>
           <div class="comparable-estimate" id="comparable-estimate" hidden aria-live="polite"></div>
@@ -329,6 +355,7 @@
               <span class="notice-icon" aria-hidden="true">i</span>
               <p>Les annonces en ligne n'ont pas de flux public gratuit fiable. Ajoutez ici les offres que vous souhaitez suivre, sans collecte automatique des portails.</p>
             </div>
+            <p class="listing-match-summary" id="listing-match-summary" hidden></p>
             <div class="listing-list" id="listing-list"></div>
             <button class="text-button" id="add-listing-link" type="button">+ Ajouter une annonce à suivre</button>
             <div class="data-backup-actions">
@@ -369,14 +396,31 @@
               </select>
             </label>
             <button class="secondary-button" id="export-transactions-button" type="button" disabled>Exporter en CSV</button>
+            <button class="secondary-button" id="export-transactions-json-button" type="button" disabled>Exporter en JSON</button>
           </div>
           <section class="transaction-map-panel" aria-labelledby="transaction-map-heading">
             <div class="transaction-map-heading">
               <h3 id="transaction-map-heading">Localisation des ventes comparables</h3>
               <span id="transaction-map-count" role="status">Chargement de la carte…</span>
             </div>
+            <div class="transaction-map-toolbar">
+              <label for="transaction-distance-filter">Rayon de la carte
+                <select id="transaction-distance-filter">
+                  <option value="5">5 km</option>
+                  <option value="10">10 km</option>
+                  <option value="15">15 km</option>
+                  <option value="20" selected>20 km</option>
+                </select>
+              </label>
+              <span>L’année sélectionnée ci-dessus s’applique aussi à la carte.</span>
+            </div>
             <div id="transaction-map" aria-label="Carte des ventes comparables géolocalisées"></div>
-            <p class="transaction-map-note">Les points reflètent les coordonnées publiées avec les données DVF et ne dessinent pas les limites cadastrales. Cliquez sur un point pour ouvrir la parcelle dans l’explorateur officiel.</p>
+            <div class="transaction-map-legend" aria-label="Légende de la carte">
+              <span><i class="legend-home"></i> Centre de la commune</span>
+              <span><i class="legend-sale"></i> Vente comparable</span>
+              <span>La taille du point indique les ventes superposées</span>
+            </div>
+            <p class="transaction-map-note">Les points reflètent les coordonnées publiées avec DVF, pas les limites cadastrales. Cliquez sur un point pour consulter les détails de la vente et ouvrir la parcelle dans l’explorateur officiel.</p>
           </section>
           <div class="transactions-table-wrap">
             <table class="transactions-table">
@@ -389,11 +433,12 @@
                   <th scope="col">Pièces</th>
                   <th scope="col">Prix au m²</th>
                   <th scope="col">DPE associé</th>
+                  <th scope="col">Construction BDNB</th>
                   <th scope="col">Parcelle cadastrale</th>
                 </tr>
               </thead>
               <tbody id="transactions-table-body">
-                <tr><td colspan="8">En attente du chargement DVF.</td></tr>
+                <tr><td colspan="9">En attente du chargement DVF.</td></tr>
               </tbody>
             </table>
           </div>
@@ -440,6 +485,8 @@
             <input id="property-rooms" name="rooms" type="number" min="1" step="1" required />
           </div>
         </div>
+        <label class="field-label" for="property-construction-year">Année de construction</label>
+        <input id="property-construction-year" name="constructionYear" type="number" min="1600" required />
         <div class="form-row">
           <div>
             <label class="field-label" for="property-land-area">Surface du terrain (m²)</label>
@@ -503,6 +550,31 @@
             <select id="listing-intent" name="intent">
               <option value="À acheter">À acheter</option>
               <option value="À vendre">À vendre</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label class="field-label" for="listing-rooms">Nombre de pièces (facultatif)</label>
+            <input id="listing-rooms" name="rooms" type="number" min="1" step="1" />
+          </div>
+          <div>
+            <label class="field-label" for="listing-land-area">Terrain (m², facultatif)</label>
+            <input id="listing-land-area" name="landArea" type="number" min="0" step="1" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label class="field-label" for="listing-construction-year">Année de construction (facultatif)</label>
+            <input id="listing-construction-year" name="constructionYear" type="number" min="1600" />
+          </div>
+          <div>
+            <label class="field-label" for="listing-energy">DPE (facultatif)</label>
+            <select id="listing-energy" name="energyRating">
+              <option value="">Non renseigné</option>
+              <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+              <option value="D">D</option><option value="E">E</option><option value="F">F</option>
+              <option value="G">G</option>
             </select>
           </div>
         </div>
