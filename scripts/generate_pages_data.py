@@ -20,6 +20,7 @@ import server
 
 
 OUTPUT_DIRECTORY = ROOT / "_site"
+HISTORY_PATH = ROOT / "data" / "snapshot-history.json"
 HOME_RADIUS_KM = 20
 
 
@@ -35,6 +36,12 @@ def read_configuration(environ=os.environ):
         if not math.isfinite(value):
             raise ValueError(f"La variable {name} doit être finie.")
         return value
+
+    def year(name, default):
+        value = number(name, default)
+        if not value.is_integer():
+            raise ValueError(f"La variable {name} doit être une année entière.")
+        return int(value)
 
     city_code = environ.get("HOME_CITY_CODE", "")
     department = environ.get("HOME_DEPARTMENT_CODE", "")
@@ -63,6 +70,8 @@ def read_configuration(environ=os.environ):
             "max_rooms": number("COMPARABLE_MAX_ROOMS", "6"),
             "min_land": number("COMPARABLE_MIN_LAND", "300"),
             "max_land": number("COMPARABLE_MAX_LAND", "1200"),
+            "min_construction_year": year("COMPARABLE_MIN_CONSTRUCTION_YEAR", "1963"),
+            "max_construction_year": year("COMPARABLE_MAX_CONSTRUCTION_YEAR", "1983"),
         },
         "dpe": environ.get("COMPARABLE_DPE", "D"),
     }
@@ -81,6 +90,8 @@ def read_configuration(environ=os.environ):
             "max_rooms": config["filters"]["max_rooms"],
             "min_land": config["filters"]["min_land"],
             "max_land": config["filters"]["max_land"],
+            "min_construction_year": config["filters"]["min_construction_year"],
+            "max_construction_year": config["filters"]["max_construction_year"],
             "dpe": config["dpe"],
             "dpe_limit": server.MAX_DPE_LOOKUPS,
         }
@@ -145,17 +156,33 @@ def load_sales(config, transaction_loader=server.load_department_transactions):
     )
     if not available_years:
         raise RuntimeError("Aucune archive DVF géolocalisée n'est disponible pour cette zone.")
+    department_coverage = [
+        {
+            "department": department,
+            "years": [
+                year
+                for year in server.AVAILABLE_YEARS
+                if archive_results[(year, department)] is not None
+            ],
+        }
+        for department in config["departments"]
+    ]
     sales = [
         sale
         for result in archive_results.values()
         if result is not None
         for sale in result
     ]
-    return sales, available_years
+    return sales, available_years, department_coverage
 
 
-def write_snapshot(config, output_directory=OUTPUT_DIRECTORY, now=None):
-    sales, available_years = load_sales(config)
+def write_snapshot(
+    config,
+    output_directory=OUTPUT_DIRECTORY,
+    now=None,
+    history_path=HISTORY_PATH,
+):
+    sales, available_years, department_coverage = load_sales(config)
     summary = server.summarize(
         sales,
         config["filters"],
@@ -173,16 +200,74 @@ def write_snapshot(config, output_directory=OUTPUT_DIRECTORY, now=None):
         "firstYear": available_years[0],
         "lastYear": available_years[-1],
         "years": available_years,
+        "coverage": department_coverage,
         "filters": {
             "livingArea": [config["filters"]["min_area"], config["filters"]["max_area"]],
             "rooms": [config["filters"]["min_rooms"], config["filters"]["max_rooms"]],
             "landArea": [config["filters"]["min_land"], config["filters"]["max_land"]],
+            "constructionYear": [
+                config["filters"]["min_construction_year"],
+                config["filters"]["max_construction_year"],
+            ],
             "dpe": config["dpe"],
         },
         "summary": summary,
     }
     (data_directory / "comparables.json").write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+    history_path = Path(history_path)
+    if history_path.exists():
+        try:
+            history = json.loads(history_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise RuntimeError("Le fichier d'historique des instantanés contient un JSON invalide.") from error
+        if (
+            not isinstance(history, dict)
+            or history.get("schemaVersion") != 1
+            or not isinstance(history.get("snapshots"), list)
+        ):
+            raise RuntimeError("Le fichier d'historique des instantanés a un format invalide.")
+    else:
+        history = {"schemaVersion": 1, "snapshots": []}
+    history_item = {
+        "generatedAt": generated_at.date().isoformat(),
+        "matched": summary.get("matched"),
+        "medianPrice": summary.get("medianPrice"),
+        "medianPricePerM2": summary.get("medianPricePerM2"),
+        "firstYear": available_years[0],
+        "lastYear": available_years[-1],
+        "years": available_years,
+        "coverage": department_coverage,
+        "filters": {
+            "livingArea": [config["filters"]["min_area"], config["filters"]["max_area"]],
+            "rooms": [config["filters"]["min_rooms"], config["filters"]["max_rooms"]],
+            "landArea": [config["filters"]["min_land"], config["filters"]["max_land"]],
+            "constructionYear": [
+                config["filters"]["min_construction_year"],
+                config["filters"]["max_construction_year"],
+            ],
+            "dpe": config["dpe"],
+        },
+        "scope": {
+            "cityCode": config["cityCode"],
+            "departments": config["departments"],
+        },
+    }
+    snapshots = [
+        item for item in history["snapshots"] if item.get("generatedAt") != history_item["generatedAt"]
+    ]
+    snapshots.append(history_item)
+    history = {
+        "schemaVersion": 1,
+        "snapshots": sorted(snapshots, key=lambda item: item["generatedAt"]),
+    }
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_text(json.dumps(history, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (data_directory / "snapshot-history.json").write_text(
+        json.dumps(history, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
 
@@ -199,6 +284,8 @@ def write_snapshot(config, output_directory=OUTPUT_DIRECTORY, now=None):
                 "maxRooms": config["filters"]["max_rooms"],
                 "minLand": config["filters"]["min_land"],
                 "maxLand": config["filters"]["max_land"],
+                "minConstructionYear": config["filters"]["min_construction_year"],
+                "maxConstructionYear": config["filters"]["max_construction_year"],
                 "dpe": config["dpe"],
             },
             ensure_ascii=False,

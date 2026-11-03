@@ -29,6 +29,7 @@ DVF_ARCHIVE = "https://files.data.gouv.fr/geo-dvf/latest/csv"
 BDNB_VERSION = os.environ.get("BDNB_VERSION", "2026-02-b")
 if not re.fullmatch(r"\d{4}-\d{2}(?:-[a-z])?", BDNB_VERSION):
     raise ValueError("BDNB_VERSION doit respecter le format AAAA-MM[-lettre].")
+BDNB_CACHE_VERSION = f"{BDNB_VERSION}-construction-v1"
 BDNB_ARCHIVE_ROOT = (
     "https://open-data.s3.fr-par.scw.cloud/"
     f"bdnb_millesime_{BDNB_VERSION}"
@@ -167,10 +168,16 @@ def connect_bdnb_cache():
             version TEXT NOT NULL,
             parcel_id TEXT NOT NULL,
             dpe_class TEXT,
+            construction_year INTEGER,
             PRIMARY KEY (department, version, parcel_id)
         )
         """
     )
+    columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(bdnb_parcel_dpe)")
+    }
+    if "construction_year" not in columns:
+        connection.execute("ALTER TABLE bdnb_parcel_dpe ADD COLUMN construction_year INTEGER")
     return connection
 
 
@@ -239,6 +246,15 @@ def refresh_bdnb_department(connection, department):
             """
         )
         connection.execute(
+            """
+            CREATE TEMP TABLE temp_bdnb_building_year (
+                building_id TEXT NOT NULL,
+                construction_year INTEGER,
+                PRIMARY KEY (building_id, construction_year)
+            )
+            """
+        )
+        connection.execute(
             "CREATE INDEX temp_bdnb_building_dpe_id ON temp_bdnb_building_dpe(building_id)"
         )
         connection.execute(
@@ -277,6 +293,27 @@ def refresh_bdnb_department(connection, department):
             lambda row: row if all(row) else None,
         )
 
+        def normalize_construction_year(row):
+            building_id, raw_year = row
+            if not building_id:
+                return None
+            try:
+                year = int(raw_year)
+            except (TypeError, ValueError):
+                return building_id, None
+            if not 1600 <= year <= datetime.date.today().year:
+                return building_id, None
+            return building_id, year
+
+        import_bdnb_table(
+            connection,
+            archive,
+            "csv/batiment_groupe_ffo_bat.csv",
+            ("batiment_groupe_id", "annee_construction"),
+            "INSERT OR IGNORE INTO temp_bdnb_building_year VALUES (?, ?)",
+            normalize_construction_year,
+        )
+
     refreshed_at = time.time()
     connection.execute(
         "DELETE FROM bdnb_parcel_dpe WHERE department = ?",
@@ -284,27 +321,35 @@ def refresh_bdnb_department(connection, department):
     )
     connection.execute(
         """
-        INSERT INTO bdnb_parcel_dpe (department, version, parcel_id, dpe_class)
+        INSERT INTO bdnb_parcel_dpe (
+            department, version, parcel_id, dpe_class, construction_year
+        )
         SELECT ?, ?, parcel.parcel_id,
                CASE WHEN COUNT(DISTINCT building_dpe.dpe_id) = 1
                     THEN MAX(dpe.classe)
                     ELSE NULL
+               END,
+               CASE WHEN COUNT(DISTINCT building_year.construction_year) = 1
+                    THEN MAX(building_year.construction_year)
+                    ELSE NULL
                END
         FROM temp_bdnb_building_parcel AS parcel
-        JOIN temp_bdnb_building_dpe AS building_dpe
+        LEFT JOIN temp_bdnb_building_dpe AS building_dpe
           ON building_dpe.building_id = parcel.building_id
         LEFT JOIN temp_bdnb_dpe AS dpe
           ON dpe.identifiant_dpe = building_dpe.dpe_id
+        LEFT JOIN temp_bdnb_building_year AS building_year
+          ON building_year.building_id = parcel.building_id
         GROUP BY parcel.parcel_id
         """,
-        (department, BDNB_VERSION),
+        (department, BDNB_CACHE_VERSION),
     )
     connection.execute(
         """
         INSERT OR REPLACE INTO bdnb_department_cache (department, version, refreshed_at)
         VALUES (?, ?, ?)
         """,
-        (department, BDNB_VERSION, refreshed_at),
+        (department, BDNB_CACHE_VERSION, refreshed_at),
     )
     connection.commit()
 
@@ -318,7 +363,7 @@ def ensure_bdnb_department(department):
                 SELECT refreshed_at FROM bdnb_department_cache
                 WHERE department = ? AND version = ?
                 """,
-                (department, BDNB_VERSION),
+                (department, BDNB_CACHE_VERSION),
             ).fetchone()
             is_fresh = (
                 row is not None
@@ -337,7 +382,7 @@ def ensure_bdnb_department(department):
             connection.close()
 
 
-def lookup_bdnb_parcel_dpe(parcels_by_department):
+def lookup_bdnb_parcel_data(parcels_by_department):
     results = {}
     connection = connect_bdnb_cache()
     try:
@@ -347,16 +392,26 @@ def lookup_bdnb_parcel_dpe(parcels_by_department):
                 placeholders = ",".join("?" for _ in batch)
                 rows = connection.execute(
                     f"""
-                    SELECT parcel_id, dpe_class FROM bdnb_parcel_dpe
+                    SELECT parcel_id, dpe_class, construction_year FROM bdnb_parcel_dpe
                     WHERE department = ? AND version = ?
                       AND parcel_id IN ({placeholders})
                     """,
-                    (department, BDNB_VERSION, *batch),
+                    (department, BDNB_CACHE_VERSION, *batch),
                 )
-                results.update(rows)
+                results.update(
+                    (parcel_id, {"dpe": dpe_class, "constructionYear": construction_year})
+                    for parcel_id, dpe_class, construction_year in rows
+                )
     finally:
         connection.close()
     return results
+
+
+def lookup_bdnb_parcel_dpe(parcels_by_department):
+    return {
+        parcel_id: parcel_data["dpe"]
+        for parcel_id, parcel_data in lookup_bdnb_parcel_data(parcels_by_department).items()
+    }
 
 
 def distance_in_km(latitude, longitude, other_latitude, other_longitude):
@@ -501,8 +556,15 @@ def summarize(sales, filters, dpe_class=None, dpe_lookup_limit=MAX_DPE_LOOKUPS):
         and filters["min_land"] <= sale["landArea"] <= filters["max_land"]
     ]
 
+    min_construction_year = filters.get("min_construction_year")
+    max_construction_year = filters.get("max_construction_year")
+    construction_filter_active = (
+        min_construction_year is not None or max_construction_year is not None
+    )
     dpe_sample = None
-    if dpe_class is not None:
+    construction_sample = None
+    parcel_data = {}
+    if dpe_class is not None or construction_filter_active:
         parcel_sales = {}
         for sale in comparable_sales:
             if sale["parcelId"] is not None:
@@ -533,21 +595,39 @@ def summarize(sales, filters, dpe_class=None, dpe_lookup_limit=MAX_DPE_LOOKUPS):
                 checked_by_department.setdefault(sale["department"], set()).add(sale["parcelId"])
         for department in sorted(checked_by_department):
             ensure_bdnb_department(department)
-        dpe_by_parcel = lookup_bdnb_parcel_dpe(
+        parcel_data = lookup_bdnb_parcel_data(
             {
                 department: sorted(parcel_ids)
                 for department, parcel_ids in checked_by_department.items()
             }
         )
-        comparable_sales = [
-            sale for sale in comparable_sales if dpe_by_parcel.get(sale["parcelId"]) == dpe_class
-        ]
-        dpe_sample = {
-            "checkedParcels": len(checked_parcels),
-            "eligibleParcels": len(all_parcels),
-            "maximumLookups": min(len(all_parcels), MAX_DPE_LOOKUPS),
-            "version": BDNB_VERSION,
-        }
+        if dpe_class is not None:
+            comparable_sales = [
+                sale
+                for sale in comparable_sales
+                if parcel_data.get(sale["parcelId"], {}).get("dpe") == dpe_class
+            ]
+            dpe_sample = {
+                "checkedParcels": len(checked_parcels),
+                "eligibleParcels": len(all_parcels),
+                "maximumLookups": min(len(all_parcels), MAX_DPE_LOOKUPS),
+                "version": BDNB_VERSION,
+            }
+        if construction_filter_active:
+            comparable_sales = [
+                sale
+                for sale in comparable_sales
+                if (construction_year := parcel_data.get(sale["parcelId"], {}).get("constructionYear"))
+                is not None
+                and (min_construction_year is None or construction_year >= min_construction_year)
+                and (max_construction_year is None or construction_year <= max_construction_year)
+            ]
+            construction_sample = {
+                "checkedParcels": len(checked_parcels),
+                "eligibleParcels": len(all_parcels),
+                "maximumLookups": min(len(all_parcels), MAX_DPE_LOOKUPS),
+                "version": BDNB_VERSION,
+            }
 
     if len(comparable_sales) < MIN_PUBLISHABLE_SALES:
         summary = {
@@ -557,6 +637,8 @@ def summarize(sales, filters, dpe_class=None, dpe_lookup_limit=MAX_DPE_LOOKUPS):
         }
         if dpe_sample is not None:
             summary["dpeSample"] = dpe_sample
+        if construction_sample is not None:
+            summary["constructionSample"] = construction_sample
         return summary
 
     prices = [sale["price"] for sale in comparable_sales]
@@ -580,6 +662,9 @@ def summarize(sales, filters, dpe_class=None, dpe_lookup_limit=MAX_DPE_LOOKUPS):
     }
     if dpe_sample is not None:
         summary["dpeSample"] = dpe_sample
+    if construction_sample is not None:
+        summary["constructionSample"] = construction_sample
+    if dpe_sample is not None or construction_sample is not None:
         summary["transactions"] = [
             {
                 "date": sale["date"],
@@ -588,7 +673,8 @@ def summarize(sales, filters, dpe_class=None, dpe_lookup_limit=MAX_DPE_LOOKUPS):
                 "landArea": sale["landArea"],
                 "rooms": sale["rooms"],
                 "pricePerM2": round(sale["price"] / sale["livingArea"]),
-                "dpe": dpe_class,
+                "dpe": parcel_data.get(sale["parcelId"], {}).get("dpe"),
+                "constructionYear": parcel_data.get(sale["parcelId"], {}).get("constructionYear"),
                 "parcelId": sale["parcelId"],
                 "latitude": sale["latitude"],
                 "longitude": sale["longitude"],
@@ -634,12 +720,33 @@ def parse_query(query):
         "min_land": number("min_land", 0, 100000),
         "max_land": number("max_land", 0, 100000),
     }
+    for parameter, filter_name in (
+        ("min_construction_year", "min_construction_year"),
+        ("max_construction_year", "max_construction_year"),
+    ):
+        raw_year = params.get(parameter, [None])[0]
+        if raw_year is None:
+            filters[filter_name] = None
+            continue
+        try:
+            year = int(raw_year)
+        except ValueError as error:
+            raise ValueError(f"Paramètre invalide : {parameter}.") from error
+        if not 1600 <= year <= datetime.date.today().year:
+            raise ValueError(f"Valeur hors limites : {parameter}.")
+        filters[filter_name] = year
     if filters["min_area"] > filters["max_area"]:
         raise ValueError("La surface habitable minimale dépasse le maximum.")
     if filters["min_rooms"] > filters["max_rooms"]:
         raise ValueError("Le nombre de pièces minimal dépasse le maximum.")
     if filters["min_land"] > filters["max_land"]:
         raise ValueError("La surface de terrain minimale dépasse le maximum.")
+    if (
+        filters["min_construction_year"] is not None
+        and filters["max_construction_year"] is not None
+        and filters["min_construction_year"] > filters["max_construction_year"]
+    ):
+        raise ValueError("L'année de construction minimale dépasse le maximum.")
 
     dpe_class = params.get("dpe", ["all"])[0]
     if dpe_class not in (*"ABCDEFG", "all"):
@@ -704,6 +811,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 for year in AVAILABLE_YEARS
                 if any(archive_results[(year, department)] is not None for department in departments)
             )
+            coverage = [
+                {
+                    "department": department,
+                    "years": [
+                        year
+                        for year in AVAILABLE_YEARS
+                        if archive_results[(year, department)] is not None
+                    ],
+                }
+                for department in departments
+            ]
+            generated_at = datetime.datetime.now(datetime.timezone.utc)
             sales = [
                 sale
                 for result in archive_results.values()
@@ -716,13 +835,20 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 200,
                 {
                     "source": "DVF géolocalisé · DGFiP/data.gouv.fr",
+                    "generatedAt": generated_at.date().isoformat(),
+                    "generatedAtUtc": generated_at.isoformat(),
                     "firstYear": available_years[0],
                     "lastYear": available_years[-1],
                     "years": available_years,
+                    "coverage": coverage,
                     "filters": {
                         "livingArea": [filters["min_area"], filters["max_area"]],
                         "rooms": [filters["min_rooms"], filters["max_rooms"]],
                         "landArea": [filters["min_land"], filters["max_land"]],
+                        "constructionYear": [
+                            filters["min_construction_year"],
+                            filters["max_construction_year"],
+                        ],
                         "dpe": dpe_class,
                     },
                     "summary": summarize(sales, filters, dpe_class, dpe_lookup_limit),

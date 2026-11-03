@@ -180,7 +180,7 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 .property-profile .panel-kicker { margin-bottom: 3px; }
 .edit-property-button { padding: 7px 10px; border: 1px solid #e4e9e3; border-radius: 7px; background: #fff; color: #52705c; font-size: 9px; font-weight: 700; }
 .property-profile-content { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 15px; }
-.property-specs { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.property-specs { flex: 1; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
 .property-spec { min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-left: 11px; border-left: 1px solid #e9ede8; }
 .property-spec:first-child { padding-left: 0; border-left: 0; }
 .property-spec strong { color: #334139; font: 700 16px Manrope, sans-serif; }
@@ -201,7 +201,7 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 
 .comparables-panel { margin-bottom: 15px; }
 .compare-button { flex: none; }
-.comparable-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 17px 0 13px; }
+.comparable-filters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 17px 0 13px; }
 .comparable-filters > label { display: flex; flex-direction: column; gap: 7px; color: #77827b; font-size: 9px; }
 .filter-range { display: flex; align-items: center; gap: 6px; color: #929b96; }
 .filter-range input { width: 68px; min-width: 0; height: 32px; padding: 0 7px; border: 1px solid #e3e8e3; border-radius: 6px; color: #344139; font-size: 10px; }
@@ -214,6 +214,19 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 .dpe-context strong { color: #6d624a; }
 .dpe-context a { color: #6b7152; }
 .comparables-status { margin: 13px 0 10px; color: #77827b; font-size: 10px; }
+.dvf-coverage, .snapshot-history { margin: 10px 0; padding: 12px; border: 1px solid #e8eee8; border-radius: 9px; background: #f9fbf8; }
+.dvf-coverage h3, .snapshot-history h3 { margin: 0 0 5px; color: #45554a; font: 700 11px Manrope, sans-serif; }
+.dvf-coverage p, .snapshot-history-heading p, .snapshot-history-note { margin: 0; color: #7e8a81; font-size: 9px; line-height: 1.5; }
+.snapshot-history-heading { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.snapshot-history-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.snapshot-history-charts > div { min-width: 0; color: #728078; font-size: 9px; }
+.snapshot-sparkline { height: 92px; margin-top: 6px; }
+.snapshot-sparkline svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.snapshot-sparkline .sparkline { fill: none; stroke: #4f8063; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.snapshot-sparkline .sparkline-point { fill: #fff; stroke: #4f8063; stroke-width: 2; }
+.snapshot-sparkline .sparkline-label { fill: #87938a; font: 8px "DM Sans", sans-serif; }
+.snapshot-history-note { margin-top: 6px; }
+.snapshot-history[hidden], .dvf-coverage[hidden] { display: none; }
 .expand-sample-button { min-height: 31px; margin: 0 0 10px; padding: 0 11px; border: 1px solid #dfe8df; border-radius: 7px; background: #f7faf6; color: #476d55; font-size: 9px; font-weight: 700; }
 .expand-sample-button:hover:not(:disabled) { background: #edf4ed; }
 .expand-sample-button:disabled { opacity: .6; cursor: wait; }
@@ -249,7 +262,8 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 .transactions-toolbar { display: flex; align-items: end; gap: 10px; margin: 12px 0; }
 .transactions-toolbar label { display: flex; flex-direction: column; gap: 4px; color: #78847c; font-size: 8px; font-weight: 600; }
 .transactions-toolbar select { min-height: 32px; padding: 0 9px; border: 1px solid #e3e8e2; border-radius: 6px; background: #fff; color: #536158; font-size: 9px; }
-.transactions-toolbar .secondary-button { min-height: 32px; margin-left: auto; padding: 0 11px; border: 1px solid #dfe8df; border-radius: 7px; background: #f7faf6; color: #476d55; font-size: 9px; font-weight: 700; }
+.transactions-toolbar .secondary-button { min-height: 32px; padding: 0 11px; border: 1px solid #dfe8df; border-radius: 7px; background: #f7faf6; color: #476d55; font-size: 9px; font-weight: 700; }
+.transactions-toolbar .secondary-button:first-of-type { margin-left: auto; }
 .transactions-toolbar .secondary-button:disabled { opacity: .55; cursor: not-allowed; }
 .transactions-table-wrap { overflow-x: auto; border: 1px solid #e9ede8; border-radius: 9px; }
 .transactions-table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: left; white-space: nowrap; }
@@ -265,7 +279,15 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 .transaction-map-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 9px; }
 .transaction-map-heading h3 { margin: 0; color: #45554a; font: 700 11px Manrope, sans-serif; }
 .transaction-map-heading span, .transaction-map-note { color: #87918a; font-size: 8px; }
+.transaction-map-toolbar { display: flex; align-items: end; gap: 12px; margin: 0 0 8px; }
+.transaction-map-toolbar label { display: flex; flex-direction: column; gap: 4px; color: #78847c; font-size: 8px; font-weight: 600; }
+.transaction-map-toolbar select { min-height: 30px; padding: 0 8px; border: 1px solid #e3e8e2; border-radius: 6px; background: #fff; color: #536158; font-size: 9px; }
+.transaction-map-toolbar > span { padding-bottom: 7px; color: #89938d; font-size: 8px; }
 #transaction-map { width: 100%; height: 340px; border-radius: 7px; background: #e7eae4; }
+.transaction-map-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; color: #728078; font-size: 8px; }
+.transaction-map-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.transaction-map-legend i { width: 9px; height: 9px; display: inline-block; border: 1px solid #fff; border-radius: 50%; background: #39765a; box-shadow: 0 0 0 1px #74917c; }
+.transaction-map-legend .legend-sale { background: #d99155; box-shadow: 0 0 0 1px #c1824d; }
 .transaction-map-note { margin: 8px 0 0; line-height: 1.5; }
 .transaction-popup { min-width: 190px; max-width: 300px; }
 .transaction-popup > strong { color: #355f4c; }
@@ -368,6 +390,10 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 .edit-listing { padding: 2px 0; border: 0; background: transparent; color: #4a7458; font-size: 8px; font-weight: 700; }
 .remove-listing { border: 0; background: transparent; color: #a2aaa5; font-size: 16px; line-height: 1; }
 .listing-details .listing-price-history { color: #7c8b7f; font-size: 8px; }
+.listing-alerts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.listing-alert { padding: 3px 6px; border-radius: 5px; background: #eaf3eb; color: #41694c !important; font-size: 8px !important; font-weight: 700; }
+.listing-alert.price-drop { background: #fff0e7; color: #9c5e3a !important; }
+.listing-match-summary { margin: 0 0 10px; padding: 9px 10px; border-radius: 7px; background: #f1f6f1; color: #4c6854; font-size: 9px; line-height: 1.5; }
 .data-backup-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 13px; padding-top: 10px; border-top: 1px solid #eff1ee; }
 .backup-status { min-height: 12px; margin: 5px 0 0; color: #77877b; font-size: 8px; line-height: 1.4; }
 .text-button { padding: 3px 0; border: 0; background: transparent; color: #4a7458; font-size: 9px; font-weight: 700; }
@@ -450,9 +476,14 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
   .transactions-toolbar label { min-width: calc(50% - 5px); flex: 1; }
   .transactions-toolbar select { width: 100%; }
   .transactions-toolbar .secondary-button { margin-left: 0; }
+  .transactions-toolbar .secondary-button:first-of-type { margin-left: 0; }
   .transactions-table { min-width: 690px; }
   .transaction-map-panel { padding: 9px; }
   .transaction-map-heading { align-items: start; flex-direction: column; gap: 4px; }
+  .transaction-map-toolbar { align-items: stretch; flex-direction: column; gap: 6px; }
+  .transaction-map-toolbar select { width: 100%; }
+  .transaction-map-toolbar > span { padding: 0; }
+  .snapshot-history-charts { grid-template-columns: 1fr; gap: 8px; }
   #transaction-map { height: 280px; }
   .comparable-result-card { padding: 9px; }
   .comparable-result-card > strong { font-size: 12px; }
