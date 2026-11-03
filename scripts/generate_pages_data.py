@@ -8,14 +8,17 @@ import math
 import os
 from pathlib import Path
 import re
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 import server
 
 
-ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIRECTORY = ROOT / "_site"
 HOME_RADIUS_KM = 20
 
