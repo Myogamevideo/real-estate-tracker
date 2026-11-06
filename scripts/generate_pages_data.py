@@ -130,7 +130,7 @@ def load_public_commune(city_code):
 def load_sales(config, transaction_loader=server.load_department_transactions):
     archive_jobs = [
         (year, department)
-        for year in server.AVAILABLE_YEARS
+        for year in server.dvf_years()
         for department in config["departments"]
     ]
     archive_results = {}
@@ -151,7 +151,7 @@ def load_sales(config, transaction_loader=server.load_department_transactions):
 
     available_years = sorted(
         year
-        for year in server.AVAILABLE_YEARS
+        for year in server.dvf_years()
         if any(archive_results[(year, department)] is not None for department in config["departments"])
     )
     if not available_years:
@@ -161,7 +161,7 @@ def load_sales(config, transaction_loader=server.load_department_transactions):
             "department": department,
             "years": [
                 year
-                for year in server.AVAILABLE_YEARS
+                for year in server.dvf_years()
                 if archive_results[(year, department)] is not None
             ],
         }
@@ -190,6 +190,16 @@ def write_snapshot(
         server.MAX_DPE_LOOKUPS,
     )
     generated_at = now or datetime.datetime.now(datetime.timezone.utc)
+    public_filters = {
+        "livingArea": [config["filters"]["min_area"], config["filters"]["max_area"]],
+        "rooms": [config["filters"]["min_rooms"], config["filters"]["max_rooms"]],
+        "landArea": [config["filters"]["min_land"], config["filters"]["max_land"]],
+        "constructionYear": [
+            config["filters"]["min_construction_year"],
+            config["filters"]["max_construction_year"],
+        ],
+        "dpe": config["dpe"],
+    }
     output_directory = Path(output_directory)
     data_directory = output_directory / "data"
     data_directory.mkdir(parents=True, exist_ok=True)
@@ -201,16 +211,7 @@ def write_snapshot(
         "lastYear": available_years[-1],
         "years": available_years,
         "coverage": department_coverage,
-        "filters": {
-            "livingArea": [config["filters"]["min_area"], config["filters"]["max_area"]],
-            "rooms": [config["filters"]["min_rooms"], config["filters"]["max_rooms"]],
-            "landArea": [config["filters"]["min_land"], config["filters"]["max_land"]],
-            "constructionYear": [
-                config["filters"]["min_construction_year"],
-                config["filters"]["max_construction_year"],
-            ],
-            "dpe": config["dpe"],
-        },
+        "filters": public_filters,
         "summary": summary,
     }
     (data_directory / "comparables.json").write_text(
@@ -241,16 +242,7 @@ def write_snapshot(
         "lastYear": available_years[-1],
         "years": available_years,
         "coverage": department_coverage,
-        "filters": {
-            "livingArea": [config["filters"]["min_area"], config["filters"]["max_area"]],
-            "rooms": [config["filters"]["min_rooms"], config["filters"]["max_rooms"]],
-            "landArea": [config["filters"]["min_land"], config["filters"]["max_land"]],
-            "constructionYear": [
-                config["filters"]["min_construction_year"],
-                config["filters"]["max_construction_year"],
-            ],
-            "dpe": config["dpe"],
-        },
+        "filters": public_filters,
         "scope": {
             "cityCode": config["cityCode"],
             "departments": config["departments"],
@@ -275,6 +267,7 @@ def write_snapshot(
     static_config = (
         f"window.STATIC_DATA_MODE = true;\n"
         f"window.LOCAL_HOME = {json.dumps(home, ensure_ascii=False)};\n"
+        f"window.STATIC_DEPARTMENTS = {json.dumps(config['departments'])};\n"
         "window.STATIC_COMPARABLE_FILTERS = "
         + json.dumps(
             {
@@ -303,7 +296,7 @@ def prepare_site(output_directory=OUTPUT_DIRECTORY):
     output_directory = Path(output_directory)
     output_directory.mkdir(parents=True, exist_ok=True)
     (output_directory / "src").mkdir(exist_ok=True)
-    for relative_path in ("index.html", "src/main.js", "src/market.js", "src/styles.css"):
+    for relative_path in ("index.html", "src/main.js", "src/market.js", "src/listings.js", "src/styles.css"):
         source = ROOT / relative_path
         target = output_directory / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)

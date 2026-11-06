@@ -1,4 +1,21 @@
-import { buildAreaSummary, buildMarketSummary, filterCommunesByRadius, SEARCH_RADIUS_KM } from "./market.js";
+import {
+  buildAreaSummary,
+  buildMarketSummary,
+  distanceInKm,
+  filterCommunesByRadius,
+  SEARCH_RADIUS_KM,
+} from "./market.js";
+import {
+  BACKUP_VERSION,
+  DEFAULT_PROPERTY,
+  getListingPriceDrop,
+  LISTING_STATUSES,
+  matchListing,
+  normalizeListing,
+  todayDate,
+  validDateString,
+  validateBackup,
+} from "./listings.js";
 
 const DVF_API = "https://dvf-api.data.gouv.fr";
 const GEO_API = "https://geo.api.gouv.fr";
@@ -10,18 +27,6 @@ const NEARBY_COMMUNES_CACHE_KEY = "maison-marche-nearby-communes";
 const NEARBY_COMMUNES_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const GEOGRAPHY_REQUEST_TIMEOUT_MS = 45000;
 const MAX_DPE_LOOKUPS = 10000;
-const LISTING_STATUSES = ["À suivre", "Contact pris", "Visite prévue", "Offre en cours", "Clôturée"];
-const BACKUP_VERSION = 2;
-const DEFAULT_PROPERTY = {
-  energyRating: "D",
-  livingArea: 105,
-  garageArea: 25,
-  landArea: 675,
-  rooms: 5,
-  purchasePrice: 215000,
-  purchaseDate: "2026-04-27",
-  constructionYear: 1973,
-};
 const DEFAULT_HOME = {
   label: "Cournon-d'Auvergne",
   latitude: 45.742,
@@ -127,6 +132,16 @@ let transactionMap;
 let transactionMapMarkers;
 let transactionMapHomeMarker;
 let editingListingId = null;
+let comparablesRequestId = 0;
+let marketRequestId = 0;
+
+// Départements du rayon : config (HOME_DEPARTMENTS) si l'adresse est celle de la config, sinon table, sinon le département seul.
+function departmentsAroundHome() {
+  const configured = window.STATIC_DEPARTMENTS ?? window.LOCAL_HOME?.departments;
+  if (configured && home.cityCode === window.LOCAL_HOME?.cityCode) return { codes: configured, complete: true };
+  const known = DEPARTMENTS_BY_RADIUS[home.departmentCode];
+  return known ? { codes: known, complete: true } : { codes: [home.departmentCode], complete: false };
+}
 
 document.querySelector("#settings-button").addEventListener("click", () => {
   elements.locationDialog.showModal();
@@ -169,9 +184,14 @@ document.querySelector("#add-listing-link").addEventListener("click", openListin
 document.querySelector("#location-form").addEventListener("submit", handleLocationSubmit);
 document.querySelector("#property-form").addEventListener("submit", handlePropertySubmit);
 document.querySelector("#listing-form").addEventListener("submit", handleListingSubmit);
+let listingAlertsTimer;
+const refreshListingAlertsSoon = () => {
+  clearTimeout(listingAlertsTimer);
+  listingAlertsTimer = setTimeout(updateListingAlerts, 200);
+};
 document.querySelectorAll(".comparable-filters input, .comparable-filters select").forEach((input) => {
-  input.addEventListener("input", updateListingAlerts);
-  input.addEventListener("change", updateListingAlerts);
+  input.addEventListener("input", refreshListingAlertsSoon);
+  input.addEventListener("change", refreshListingAlertsSoon);
 });
 document.querySelectorAll("[data-close]").forEach((button) => {
   button.addEventListener("click", () => document.getElementById(button.dataset.close).close());
@@ -281,7 +301,7 @@ async function getNearbyCommunes() {
     cacheMatchesHome && Date.now() - cached.savedAt < NEARBY_COMMUNES_CACHE_TTL_MS;
   if (cacheIsFresh) return { communes: cached.communes, missingDepartments: [] };
 
-  const departmentCodes = DEPARTMENTS_BY_RADIUS[home.departmentCode] ?? [home.departmentCode];
+  const departmentCodes = departmentsAroundHome().codes;
   const responses = await Promise.allSettled(
     departmentCodes.map((code) =>
       fetchJson(
@@ -348,6 +368,7 @@ function readNearbyCommunesCache() {
 }
 
 async function loadMarketData() {
+  const requestId = ++marketRequestId;
   marketData = [];
   nearbyCommunes = [];
   localTrendRows = [];
@@ -355,8 +376,9 @@ async function loadMarketData() {
   elements.townList.innerHTML = '<p class="loading-row">Chargement des données communales…</p>';
   try {
     const geography = await getNearbyCommunes();
+    if (requestId !== marketRequestId) return;
     nearbyCommunes = geography.communes;
-    const departmentCodes = DEPARTMENTS_BY_RADIUS[home.departmentCode] ?? [home.departmentCode];
+    const departmentCodes = departmentsAroundHome().codes;
     const [departmentResults, trendResult] = await Promise.all([
       Promise.allSettled(
         departmentCodes.map((code) =>
@@ -368,6 +390,7 @@ async function loadMarketData() {
         (reason) => ({ status: "rejected", reason }),
       ),
     ]);
+    if (requestId !== marketRequestId) return;
     const departmentResponses = departmentResults.flatMap((result) =>
       result.status === "fulfilled" ? [result.value] : [],
     );
@@ -410,6 +433,7 @@ async function loadMarketData() {
     }
     if (!window.STATIC_DATA_MODE) loadComparables();
   } catch (error) {
+    if (requestId !== marketRequestId) return;
     console.error("Le chargement des données DVF a échoué.", error);
     elements.updated.textContent = "Échec du chargement DVF";
     elements.townList.innerHTML = '<p class="empty-row">Le chargement des données a échoué. Vérifiez la connexion puis réessayez.</p>';
@@ -462,8 +486,11 @@ function renderPropertyProfile(localHousePrice = null) {
     : "—";
   elements.profileEnergy.textContent = property.energyRating;
   elements.comparableDpe.textContent = property.energyRating;
-  elements.purchasePrice.textContent = `${formatNumber(property.purchasePrice)} €`;
-  elements.purchaseDate.textContent = property.purchaseDate
+  const hasPurchasePrice = property.purchasePrice > 0;
+  elements.purchasePrice.textContent = hasPurchasePrice
+    ? `${formatNumber(property.purchasePrice)} €`
+    : "Non renseigné";
+  elements.purchaseDate.textContent = validDateString(property.purchaseDate)
     ? `Achetée le ${formatDate(property.purchaseDate)}`
     : "Date d'achat non renseignée";
 
@@ -480,13 +507,17 @@ function renderPropertyProfile(localHousePrice = null) {
   elements.propertyValue.textContent = `${formatNumber(estimatedValue)} €`;
   elements.propertyEstimateDetail.textContent =
     `${formatNumber(property.livingArea)} m² × ${formatNumber(localHousePrice)} €/m² autour de ${home.label}`;
+  if (!hasPurchasePrice) {
+    elements.purchaseDifference.textContent = "—";
+    elements.purchaseDifferencePercent.textContent = "Prix d'achat non renseigné";
+    elements.purchaseDifference.classList.remove("positive", "negative");
+    return;
+  }
   const difference = estimatedValue - property.purchasePrice;
-  const differencePercent = property.purchasePrice > 0 ? (difference / property.purchasePrice) * 100 : null;
+  const differencePercent = (difference / property.purchasePrice) * 100;
   elements.purchaseDifference.textContent = `${difference > 0 ? "+" : difference < 0 ? "−" : ""}${formatNumber(Math.abs(difference))} €`;
   elements.purchaseDifferencePercent.textContent =
-    differencePercent === null
-      ? "Prix d'achat non renseigné"
-      : `${differencePercent > 0 ? "+" : ""}${differencePercent.toFixed(1).replace(".", ",")} % · écart brut indicatif`;
+    `${differencePercent > 0 ? "+" : ""}${differencePercent.toFixed(1).replace(".", ",")} % · écart brut indicatif`;
   elements.purchaseDifference.classList.toggle("positive", difference > 0);
   elements.purchaseDifference.classList.toggle("negative", difference < 0);
 }
@@ -579,16 +610,16 @@ function handlePropertySubmit(event) {
 }
 
 async function loadComparables({ expandDpeSample = false } = {}) {
+  const requestId = ++comparablesRequestId;
   const departmentCodes = nearbyCommunes.length
     ? nearbyCommunes.map((commune) =>
         /^9[78]\d{3}$/.test(commune.code) ? commune.code.slice(0, 3) : commune.code.slice(0, 2),
       )
-    : DEPARTMENTS_BY_RADIUS[home.departmentCode] ?? [home.departmentCode];
+    : departmentsAroundHome().codes;
   const departments = [...new Set(departmentCodes)];
-  const coverageNotice =
-    nearbyCommunes.length === 0 && !DEPARTMENTS_BY_RADIUS[home.departmentCode]
-      ? `Couverture provisoire limitée au département ${home.departmentCode}. `
-      : "";
+  const coverageNotice = departmentsAroundHome().complete
+    ? ""
+    : `Couverture provisoire limitée au département ${home.departmentCode}. `;
   const params = new URLSearchParams({
     lat: String(home.latitude),
     lon: String(home.longitude),
@@ -651,6 +682,7 @@ async function loadComparables({ expandDpeSample = false } = {}) {
       window.STATIC_DATA_MODE ? "./data/comparables.json" : `/api/dvf-comparables?${params}`,
       180000,
     );
+    if (requestId !== comparablesRequestId) return;
     if (window.STATIC_DATA_MODE && response.filters) {
       configureStaticComparableFilters({
         minArea: response.filters.livingArea[0],
@@ -733,6 +765,7 @@ async function loadComparables({ expandDpeSample = false } = {}) {
     renderComparableValuation(summary.transactions, params.get("dpe"));
     updateListingAlerts();
   } catch (error) {
+    if (requestId !== comparablesRequestId) return;
     console.error("Le chargement des comparables DVF a échoué.", error);
     const errorMessage =
       error.message.includes("404") || error.message.includes("Failed to fetch")
@@ -752,13 +785,17 @@ async function loadComparables({ expandDpeSample = false } = {}) {
       clearComparableValuation();
     }
   } finally {
-    elements.compareButton.disabled = false;
-    elements.compareButton.textContent = "Actualiser les comparables";
-    elements.refreshTransactionsButton.disabled = false;
-    elements.refreshTransactionsButton.textContent = "Actualiser";
-    elements.expandSampleButton.disabled = false;
-    elements.expandTransactionsButton.disabled = false;
+    if (requestId === comparablesRequestId) restoreComparableButtons();
   }
+}
+
+function restoreComparableButtons() {
+  elements.compareButton.disabled = false;
+  elements.compareButton.textContent = "Actualiser les comparables";
+  elements.refreshTransactionsButton.disabled = false;
+  elements.refreshTransactionsButton.textContent = "Actualiser";
+  elements.expandSampleButton.disabled = false;
+  elements.expandTransactionsButton.disabled = false;
 }
 
 function updateExpandSampleButtons(dpeSample) {
@@ -1046,7 +1083,7 @@ function renderTransactionMap(transactions) {
   const radiusKm = Number(elements.transactionDistanceFilter.value) || 20;
   const mapTransactions = transactions.filter((sale) => {
     const coordinates = getSaleCoordinates(sale);
-    return coordinates && distanceInKm(home.latitude, home.longitude, coordinates[0], coordinates[1]) <= radiusKm;
+    return coordinates && distanceInKm(home, { latitude: coordinates[0], longitude: coordinates[1] }) <= radiusKm;
   });
   const locations = new Map();
   for (const sale of mapTransactions) {
@@ -1104,18 +1141,6 @@ function renderTransactionMap(transactions) {
   }
 }
 
-function distanceInKm(latitude, longitude, otherLatitude, otherLongitude) {
-  const radians = (value) => (value * Math.PI) / 180;
-  const latDifference = radians(otherLatitude - latitude);
-  const lonDifference = radians(otherLongitude - longitude);
-  const value =
-    Math.sin(latDifference / 2) ** 2 +
-    Math.cos(radians(latitude)) *
-      Math.cos(radians(otherLatitude)) *
-      Math.sin(lonDifference / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
-}
-
 function renderComparableValuation(transactions, dpeClass) {
   if (!Array.isArray(transactions) || transactions.length < 5) {
     clearComparableValuation();
@@ -1140,6 +1165,9 @@ function renderComparableValuation(transactions, dpeClass) {
       : property.purchasePrice > upper
         ? "Votre prix d'achat est supérieur à la fourchette."
         : "Votre prix d'achat se situe dans la fourchette.";
+  const purchaseNote = property.purchasePrice > 0 && validDateString(property.purchaseDate)
+    ? `<p class="purchase-range-note">${purchasePosition} Achat du ${escapeHtml(formatDate(property.purchaseDate))} : ${formatNumber(property.purchasePrice)} €, soit ${purchaseDifference > 0 ? "+" : purchaseDifference < 0 ? "−" : ""}${formatNumber(Math.abs(Math.round(purchaseDifference)))} € (${purchaseDifferencePercent > 0 ? "+" : ""}${purchaseDifferencePercent.toFixed(1).replace(".", ",")} %) par rapport à la médiane extrapolée. Indication brute, hors frais d'achat, travaux et évolution propre au logement.</p>`
+    : "";
   elements.comparableEstimate.innerHTML = `
     <div>
       <span class="estimate-kicker">FOURCHETTE INDICATIVE PAR COMPARABLES · ${escapeHtml(dpeLabel.toUpperCase())}</span>
@@ -1148,7 +1176,7 @@ function renderComparableValuation(transactions, dpeClass) {
     </div>
     <div class="comparable-estimate-details">
       <p>Fourchette centrale : <strong>${formatNumber(Math.round(lower / 1000) * 1000)}–${formatNumber(Math.round(upper / 1000) * 1000)} €</strong>. Calcul au prorata du prix au m² des ventes filtrées ; les caractéristiques non comparées ne sont pas ajustées.</p>
-      <p class="purchase-range-note">${purchasePosition} Achat du ${escapeHtml(formatDate(property.purchaseDate))} : ${formatNumber(property.purchasePrice)} €, soit ${purchaseDifference > 0 ? "+" : purchaseDifference < 0 ? "−" : ""}${formatNumber(Math.abs(Math.round(purchaseDifference)))} € (${purchaseDifferencePercent > 0 ? "+" : ""}${purchaseDifferencePercent.toFixed(1).replace(".", ",")} %) par rapport à la médiane extrapolée. Indication brute, hors frais d'achat, travaux et évolution propre au logement.</p>
+      ${purchaseNote}
     </div>`;
   elements.comparableEstimate.hidden = false;
   renderAnnualComparables(transactions);
@@ -1555,59 +1583,21 @@ function renderListings() {
   });
 }
 
-function getListingPriceDrop(listing) {
-  const history = Array.isArray(listing.priceHistory) ? listing.priceHistory : [];
-  if (history.length < 2) return null;
-  const previous = history.at(-2);
-  const latest = history.at(-1);
-  if (!Number.isFinite(previous.price) || !Number.isFinite(latest.price) || latest.price >= previous.price) {
-    return null;
-  }
-  return {
-    amount: previous.price - latest.price,
-    percent: ((previous.price - latest.price) / previous.price) * 100,
-  };
-}
-
 function getListingMatch(listing) {
-  if (listing.kind !== "Maison") return { matches: false, complete: false };
-  const ranges = {
-    area: [
-      Number(document.querySelector("#filter-min-area").value),
-      Number(document.querySelector("#filter-max-area").value),
-    ],
-    rooms: [
-      Number(document.querySelector("#filter-min-rooms").value),
-      Number(document.querySelector("#filter-max-rooms").value),
-    ],
-    landArea: [
-      Number(document.querySelector("#filter-min-land").value),
-      Number(document.querySelector("#filter-max-land").value),
-    ],
-    constructionYear: [
-      Number(document.querySelector("#filter-min-construction-year").value),
-      Number(document.querySelector("#filter-max-construction-year").value),
-    ],
-  };
-  if (listing.area < ranges.area[0] || listing.area > ranges.area[1]) {
-    return { matches: false, complete: false };
-  }
-  const criteria = [
-    { value: listing.rooms, range: ranges.rooms },
-    { value: listing.landArea, range: ranges.landArea },
-    { value: listing.constructionYear, range: ranges.constructionYear },
+  const range = (minimum, maximum) => [
+    Number(document.querySelector(minimum).value),
+    Number(document.querySelector(maximum).value),
   ];
-  const dpe = elements.comparableDpeFilter.value;
-  if (dpe !== "all" && listing.energyRating && listing.energyRating !== dpe) {
-    return { matches: false, complete: false };
-  }
-  const complete =
-    criteria.every(({ value }) => value != null && Number.isFinite(value)) &&
-    (dpe === "all" || Boolean(listing.energyRating));
-  const matches = criteria.every(({ value, range }) =>
-    value == null || !Number.isFinite(value) || (value >= range[0] && value <= range[1]),
+  return matchListing(
+    listing,
+    {
+      area: range("#filter-min-area", "#filter-max-area"),
+      rooms: range("#filter-min-rooms", "#filter-max-rooms"),
+      landArea: range("#filter-min-land", "#filter-max-land"),
+      constructionYear: range("#filter-min-construction-year", "#filter-max-construction-year"),
+    },
+    elements.comparableDpeFilter.value,
   );
-  return { matches, complete };
 }
 
 function renderListingAlerts(listing) {
@@ -1722,37 +1712,6 @@ function saveListings() {
   }
 }
 
-function normalizeListing(listing) {
-  const createdAt = validDateString(listing.createdAt) ? listing.createdAt : todayDate();
-  const priceHistory = Array.isArray(listing.priceHistory)
-    ? listing.priceHistory.filter((item) =>
-      item && validDateString(item.date) && Number.isFinite(item.price) && item.price > 0,
-    )
-    : [];
-  if (priceHistory.length === 0 && Number.isFinite(listing.price) && listing.price > 0) {
-    priceHistory.push({ date: createdAt, price: listing.price });
-  }
-  return {
-    ...listing,
-    rooms: Number.isFinite(listing.rooms) ? listing.rooms : null,
-    landArea: Number.isFinite(listing.landArea) ? listing.landArea : null,
-    constructionYear: Number.isFinite(listing.constructionYear) ? listing.constructionYear : null,
-    energyRating: [..."ABCDEFG"].includes(listing.energyRating) ? listing.energyRating : null,
-    status: LISTING_STATUSES.includes(listing.status) ? listing.status : "À suivre",
-    createdAt,
-    updatedAt: validDateString(listing.updatedAt) ? listing.updatedAt : createdAt,
-    priceHistory,
-  };
-}
-
-function todayDate() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
-function validDateString(value) {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00`));
-}
 
 function exportUserData() {
   const backup = {
@@ -1827,105 +1786,6 @@ async function importUserData(event) {
     console.error("La sauvegarde n'a pas pu être restaurée.", error);
     elements.backupStatus.textContent = `Restauration impossible : ${error.message}`;
   }
-}
-
-function validateBackup(backup) {
-  if (
-    !backup ||
-    backup.app !== "Maison & Marché" ||
-    ![1, BACKUP_VERSION].includes(backup.schemaVersion) ||
-    !Array.isArray(backup.listings)
-  ) {
-    throw new Error("Ce fichier n'est pas une sauvegarde Maison & Marché reconnue.");
-  }
-  const location = backup.location;
-  if (
-    !location ||
-    typeof location.label !== "string" ||
-    !location.label.trim() ||
-    !Number.isFinite(location.latitude) ||
-    !Number.isFinite(location.longitude) ||
-    location.latitude < -90 ||
-    location.latitude > 90 ||
-    location.longitude < -180 ||
-    location.longitude > 180 ||
-    !/^(?:\d{2,3}|2[AB])$/.test(location.departmentCode ?? "") ||
-    !/^[0-9A-Z]{5,6}$/.test(location.cityCode ?? "")
-  ) {
-    throw new Error("Les coordonnées de localisation de cette sauvegarde sont invalides.");
-  }
-  const backupProperty = backup.property
-    ? { ...DEFAULT_PROPERTY, ...backup.property }
-    : null;
-  if (
-    !backupProperty ||
-    !Number.isFinite(backupProperty.livingArea) ||
-    backupProperty.livingArea <= 0 ||
-    !Number.isFinite(backupProperty.garageArea) ||
-    backupProperty.garageArea < 0 ||
-    !Number.isFinite(backupProperty.landArea) ||
-    backupProperty.landArea < 0 ||
-    !Number.isFinite(backupProperty.rooms) ||
-    backupProperty.rooms < 1 ||
-    !Number.isInteger(backupProperty.constructionYear) ||
-    backupProperty.constructionYear < 1600 ||
-    backupProperty.constructionYear > new Date().getFullYear() ||
-    !Number.isFinite(backupProperty.purchasePrice) ||
-    backupProperty.purchasePrice < 0 ||
-    !validDateString(backupProperty.purchaseDate) ||
-    ![..."ABCDEFG", "Inconnu"].includes(backupProperty.energyRating)
-  ) {
-    throw new Error("Le profil immobilier de cette sauvegarde est invalide.");
-  }
-  if (backup.listings.length > 1000) {
-    throw new Error("La sauvegarde contient trop d'annonces.");
-  }
-  const listings = backup.listings.map((listing) => {
-    if (!listing || typeof listing !== "object" || Array.isArray(listing)) {
-      throw new Error("Une annonce de cette sauvegarde est invalide.");
-    }
-    const normalized = normalizeListing(listing);
-    let url;
-    try {
-      url = new URL(normalized.url);
-    } catch {
-      throw new Error("Une annonce contient un lien invalide.");
-    }
-    if (
-      typeof normalized.title !== "string" ||
-      !normalized.title.trim() ||
-      !Number.isFinite(normalized.price) ||
-      normalized.price <= 0 ||
-      !Number.isFinite(normalized.area) ||
-      normalized.area <= 0 ||
-      !["Maison", "Appartement", "Terrain"].includes(normalized.kind) ||
-      !["À acheter", "À vendre"].includes(normalized.intent) ||
-      (url.protocol !== "https:" && url.protocol !== "http:") ||
-      typeof normalized.id !== "string" ||
-      !normalized.id ||
-      (listing.rooms != null && (!Number.isFinite(listing.rooms) || listing.rooms < 1)) ||
-      (listing.landArea != null && (!Number.isFinite(listing.landArea) || listing.landArea < 0)) ||
-      (listing.constructionYear != null && (
-        !Number.isInteger(listing.constructionYear) ||
-        listing.constructionYear < 1600 ||
-        listing.constructionYear > new Date().getFullYear()
-      ))
-    ) {
-      throw new Error("Une annonce de cette sauvegarde contient des informations invalides.");
-    }
-    return normalized;
-  });
-  return {
-    location: {
-      label: location.label.trim(),
-      latitude: location.latitude,
-      longitude: location.longitude,
-      departmentCode: location.departmentCode,
-      cityCode: location.cityCode,
-    },
-    property: backupProperty,
-    listings,
-  };
 }
 
 async function handleLocationSubmit(event) {
