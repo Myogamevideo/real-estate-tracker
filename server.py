@@ -10,6 +10,7 @@ import io
 import json
 import math
 import os
+import posixpath
 import re
 import sqlite3
 import statistics
@@ -21,7 +22,7 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 
 ROOT = Path(__file__).resolve().parent
@@ -46,6 +47,8 @@ DPE_CLASSES = frozenset("ABCDEFG")
 BDNB_CACHE_LOCK = threading.Lock()
 HTTP_RANGE_BLOCK_SIZE = 1024 * 1024
 HTTP_RANGE_CACHE_BLOCKS = 4
+SERVED_FILES = frozenset({"/", "/index.html", "/static-config.js", "/config.local.js"})
+SERVED_DIRECTORIES = ("/src/", "/data/")
 
 
 def parse_number(value):
@@ -779,7 +782,24 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def is_request_allowed(self):
+        # Refuse foreign Host headers (DNS rebinding) and anything but the app's own files.
+        port = self.server.server_address[1]
+        if self.headers.get("Host") not in {f"127.0.0.1:{port}", f"localhost:{port}"}:
+            return False
+        path = posixpath.normpath(unquote(urlparse(self.path).path))
+        if path == "/api/dvf-comparables":
+            return True
+        return path in SERVED_FILES or path.startswith(SERVED_DIRECTORIES)
+
+    def do_HEAD(self):
+        if not self.is_request_allowed():
+            return self.send_error(403)
+        return super().do_HEAD()
+
     def do_GET(self):
+        if not self.is_request_allowed():
+            return self.send_error(403)
         parsed_url = urlparse(self.path)
         if parsed_url.path != "/api/dvf-comparables":
             return super().do_GET()

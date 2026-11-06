@@ -1,9 +1,12 @@
 import datetime
+import http.client
 import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import threading
 import unittest
+from http.server import ThreadingHTTPServer
 
 import server
 
@@ -165,6 +168,55 @@ class SnapshotFeatureTests(unittest.TestCase):
         self.assertEqual(snapshot["filters"]["constructionYear"], [1963, 1983])
         self.assertTrue(site_history_exists)
         self.assertEqual(len(history["snapshots"]), 1)
+
+    def test_published_site_has_no_personal_purchase_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            site = Path(directory) / "_site"
+            generator.prepare_site(site)
+            published = (site / "src" / "main.js").read_text(encoding="utf-8")
+        self.assertNotIn("215000", published)
+        self.assertNotIn("2026-04-27", published)
+
+
+class LocalServerGuardTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.DashboardHandler)
+        cls.port = cls.httpd.server_address[1]
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+
+    def status(self, path, host=None):
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        connection.putrequest("GET", path, skip_host=True)
+        connection.putheader("Host", host or f"127.0.0.1:{self.port}")
+        connection.endheaders()
+        status = connection.getresponse().status
+        connection.close()
+        return status
+
+    def test_foreign_host_header_is_refused(self):
+        self.assertEqual(self.status("/", host="evil.example"), 403)
+        self.assertEqual(self.status("/", host=f"evil.example:{self.port}"), 403)
+
+    def test_local_host_headers_are_accepted(self):
+        self.assertEqual(self.status("/"), 200)
+        self.assertEqual(self.status("/", host=f"localhost:{self.port}"), 200)
+
+    def test_only_application_files_are_served(self):
+        for path in (
+            "/.git/config",
+            "/server.py",
+            "/src/../.git/config",
+            "/src/%2e%2e/.git/config",
+            "/tests/test_snapshot_features.py",
+        ):
+            self.assertEqual(self.status(path), 403, path)
+        self.assertEqual(self.status("/src/main.js"), 200)
 
 
 if __name__ == "__main__":

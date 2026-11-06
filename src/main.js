@@ -12,15 +12,16 @@ const GEOGRAPHY_REQUEST_TIMEOUT_MS = 45000;
 const MAX_DPE_LOOKUPS = 10000;
 const LISTING_STATUSES = ["À suivre", "Contact pris", "Visite prévue", "Offre en cours", "Clôturée"];
 const BACKUP_VERSION = 2;
+// Valeurs neutres : le profil réel vit dans le navigateur ou dans config.local.js (LOCAL_HOME.property).
 const DEFAULT_PROPERTY = {
   energyRating: "D",
-  livingArea: 105,
-  garageArea: 25,
-  landArea: 675,
+  livingArea: 100,
+  garageArea: 0,
+  landArea: 500,
   rooms: 5,
-  purchasePrice: 215000,
-  purchaseDate: "2026-04-27",
-  constructionYear: 1973,
+  purchasePrice: 0,
+  purchaseDate: "",
+  constructionYear: 1975,
 };
 const DEFAULT_HOME = {
   label: "Cournon-d'Auvergne",
@@ -462,8 +463,11 @@ function renderPropertyProfile(localHousePrice = null) {
     : "—";
   elements.profileEnergy.textContent = property.energyRating;
   elements.comparableDpe.textContent = property.energyRating;
-  elements.purchasePrice.textContent = `${formatNumber(property.purchasePrice)} €`;
-  elements.purchaseDate.textContent = property.purchaseDate
+  const hasPurchasePrice = property.purchasePrice > 0;
+  elements.purchasePrice.textContent = hasPurchasePrice
+    ? `${formatNumber(property.purchasePrice)} €`
+    : "Non renseigné";
+  elements.purchaseDate.textContent = validDateString(property.purchaseDate)
     ? `Achetée le ${formatDate(property.purchaseDate)}`
     : "Date d'achat non renseignée";
 
@@ -480,13 +484,17 @@ function renderPropertyProfile(localHousePrice = null) {
   elements.propertyValue.textContent = `${formatNumber(estimatedValue)} €`;
   elements.propertyEstimateDetail.textContent =
     `${formatNumber(property.livingArea)} m² × ${formatNumber(localHousePrice)} €/m² autour de ${home.label}`;
+  if (!hasPurchasePrice) {
+    elements.purchaseDifference.textContent = "—";
+    elements.purchaseDifferencePercent.textContent = "Prix d'achat non renseigné";
+    elements.purchaseDifference.classList.remove("positive", "negative");
+    return;
+  }
   const difference = estimatedValue - property.purchasePrice;
-  const differencePercent = property.purchasePrice > 0 ? (difference / property.purchasePrice) * 100 : null;
+  const differencePercent = (difference / property.purchasePrice) * 100;
   elements.purchaseDifference.textContent = `${difference > 0 ? "+" : difference < 0 ? "−" : ""}${formatNumber(Math.abs(difference))} €`;
   elements.purchaseDifferencePercent.textContent =
-    differencePercent === null
-      ? "Prix d'achat non renseigné"
-      : `${differencePercent > 0 ? "+" : ""}${differencePercent.toFixed(1).replace(".", ",")} % · écart brut indicatif`;
+    `${differencePercent > 0 ? "+" : ""}${differencePercent.toFixed(1).replace(".", ",")} % · écart brut indicatif`;
   elements.purchaseDifference.classList.toggle("positive", difference > 0);
   elements.purchaseDifference.classList.toggle("negative", difference < 0);
 }
@@ -1140,6 +1148,9 @@ function renderComparableValuation(transactions, dpeClass) {
       : property.purchasePrice > upper
         ? "Votre prix d'achat est supérieur à la fourchette."
         : "Votre prix d'achat se situe dans la fourchette.";
+  const purchaseNote = property.purchasePrice > 0 && validDateString(property.purchaseDate)
+    ? `<p class="purchase-range-note">${purchasePosition} Achat du ${escapeHtml(formatDate(property.purchaseDate))} : ${formatNumber(property.purchasePrice)} €, soit ${purchaseDifference > 0 ? "+" : purchaseDifference < 0 ? "−" : ""}${formatNumber(Math.abs(Math.round(purchaseDifference)))} € (${purchaseDifferencePercent > 0 ? "+" : ""}${purchaseDifferencePercent.toFixed(1).replace(".", ",")} %) par rapport à la médiane extrapolée. Indication brute, hors frais d'achat, travaux et évolution propre au logement.</p>`
+    : "";
   elements.comparableEstimate.innerHTML = `
     <div>
       <span class="estimate-kicker">FOURCHETTE INDICATIVE PAR COMPARABLES · ${escapeHtml(dpeLabel.toUpperCase())}</span>
@@ -1148,7 +1159,7 @@ function renderComparableValuation(transactions, dpeClass) {
     </div>
     <div class="comparable-estimate-details">
       <p>Fourchette centrale : <strong>${formatNumber(Math.round(lower / 1000) * 1000)}–${formatNumber(Math.round(upper / 1000) * 1000)} €</strong>. Calcul au prorata du prix au m² des ventes filtrées ; les caractéristiques non comparées ne sont pas ajustées.</p>
-      <p class="purchase-range-note">${purchasePosition} Achat du ${escapeHtml(formatDate(property.purchaseDate))} : ${formatNumber(property.purchasePrice)} €, soit ${purchaseDifference > 0 ? "+" : purchaseDifference < 0 ? "−" : ""}${formatNumber(Math.abs(Math.round(purchaseDifference)))} € (${purchaseDifferencePercent > 0 ? "+" : ""}${purchaseDifferencePercent.toFixed(1).replace(".", ",")} %) par rapport à la médiane extrapolée. Indication brute, hors frais d'achat, travaux et évolution propre au logement.</p>
+      ${purchaseNote}
     </div>`;
   elements.comparableEstimate.hidden = false;
   renderAnnualComparables(transactions);
@@ -1872,7 +1883,7 @@ function validateBackup(backup) {
     backupProperty.constructionYear > new Date().getFullYear() ||
     !Number.isFinite(backupProperty.purchasePrice) ||
     backupProperty.purchasePrice < 0 ||
-    !validDateString(backupProperty.purchaseDate) ||
+    (backupProperty.purchaseDate !== "" && !validDateString(backupProperty.purchaseDate)) ||
     ![..."ABCDEFG", "Inconnu"].includes(backupProperty.energyRating)
   ) {
     throw new Error("Le profil immobilier de cette sauvegarde est invalide.");
