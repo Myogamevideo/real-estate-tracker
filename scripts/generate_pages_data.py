@@ -267,6 +267,7 @@ def write_snapshot(
     static_config = (
         f"window.STATIC_DATA_MODE = true;\n"
         f"window.LOCAL_HOME = {json.dumps(home, ensure_ascii=False)};\n"
+        f"window.STATIC_DEPARTMENTS = {json.dumps(config['departments'])};\n"
         "window.STATIC_COMPARABLE_FILTERS = "
         + json.dumps(
             {
@@ -295,7 +296,7 @@ def prepare_site(output_directory=OUTPUT_DIRECTORY):
     output_directory = Path(output_directory)
     output_directory.mkdir(parents=True, exist_ok=True)
     (output_directory / "src").mkdir(exist_ok=True)
-    for relative_path in ("index.html", "src/main.js", "src/market.js", "src/styles.css"):
+    for relative_path in ("index.html", "src/main.js", "src/market.js", "src/listings.js", "src/styles.css"):
         source = ROOT / relative_path
         target = output_directory / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)

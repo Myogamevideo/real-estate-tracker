@@ -20,5 +20,6 @@ Maison & Marché est un tableau de bord immobilier français. L'application fonc
 ## Vérifications
 
 - Après une modification Python, lancer `python3 -m py_compile server.py scripts/generate_pages_data.py`.
+- Lancer les tests avec `python3 -m unittest discover tests` et `node --test tests/front`.
 - Vérifier les changements avec `git diff --check`.
 - Pour les changements du mode Pages, vérifier que les chemins relatifs fonctionnent sur une URL GitHub Pages de projet et que la configuration locale n'est pas incluse dans l'artefact publié.

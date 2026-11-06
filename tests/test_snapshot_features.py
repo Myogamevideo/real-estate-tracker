@@ -164,6 +164,7 @@ class SnapshotFeatureTests(unittest.TestCase):
                 snapshot = json.loads((site / "data" / "comparables.json").read_text())
                 history = json.loads(history_path.read_text())
                 site_history_exists = (site / "data" / "snapshot-history.json").exists()
+                static_config = (site / "static-config.js").read_text(encoding="utf-8")
         finally:
             generator.load_sales = original_load_sales
             server.summarize = original_summarize
@@ -174,6 +175,15 @@ class SnapshotFeatureTests(unittest.TestCase):
         self.assertEqual(snapshot["filters"]["constructionYear"], [1963, 1983])
         self.assertTrue(site_history_exists)
         self.assertEqual(len(history["snapshots"]), 1)
+        self.assertIn('window.STATIC_DEPARTMENTS = ["63", "03"];', static_config)
+
+    def test_published_site_contains_every_front_module(self):
+        with tempfile.TemporaryDirectory() as directory:
+            site = Path(directory) / "_site"
+            generator.prepare_site(site)
+            published = {path.name for path in (site / "src").iterdir()}
+        expected = {path.name for path in (ROOT / "src").iterdir()}
+        self.assertEqual(published, expected)
 
     def test_published_site_has_no_personal_purchase_profile(self):
         with tempfile.TemporaryDirectory() as directory:
