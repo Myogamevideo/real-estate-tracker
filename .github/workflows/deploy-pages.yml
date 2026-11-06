@@ -68,6 +68,7 @@ jobs:
         run: python scripts/generate_pages_data.py
 
       - name: Save snapshot history
+        if: github.event_name != 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

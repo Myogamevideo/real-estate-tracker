@@ -6,6 +6,7 @@ import datetime
 from collections import OrderedDict
 from functools import lru_cache
 import gzip
+import http.client
 import io
 import json
 import math
@@ -39,7 +40,6 @@ BDNB_CACHE_PATH = ROOT / ".cache" / "bdnb-dpe.sqlite3"
 BDNB_CACHE_TTL_SECONDS = int(os.environ.get("BDNB_CACHE_TTL_DAYS", "90")) * 86400
 if BDNB_CACHE_TTL_SECONDS < 0:
     raise ValueError("BDNB_CACHE_TTL_DAYS ne peut pas être négatif.")
-AVAILABLE_YEARS = tuple(range(2021, datetime.date.today().year + 1))
 EARTH_RADIUS_KM = 6371
 MIN_PUBLISHABLE_SALES = 5
 MAX_DPE_LOOKUPS = 10000
@@ -49,6 +49,10 @@ HTTP_RANGE_BLOCK_SIZE = 1024 * 1024
 HTTP_RANGE_CACHE_BLOCKS = 4
 SERVED_FILES = frozenset({"/", "/index.html", "/static-config.js", "/config.local.js"})
 SERVED_DIRECTORIES = ("/src/", "/data/")
+
+
+def dvf_years():
+    return tuple(range(2021, datetime.date.today().year + 1))
 
 
 def parse_number(value):
@@ -132,7 +136,7 @@ class HttpRangeReader:
                                 "Le serveur BDNB n'a pas respecté une requête de téléchargement partiel."
                             )
                         block = response.read()
-                except (urllib.error.URLError, TimeoutError) as error:
+                except (urllib.error.URLError, TimeoutError, http.client.HTTPException) as error:
                     raise RuntimeError("Le téléchargement ciblé de l'archive BDNB a échoué.") from error
                 if len(block) != block_end - start + 1:
                     raise RuntimeError("L'archive BDNB a renvoyé un bloc incomplet.")
@@ -319,8 +323,8 @@ def refresh_bdnb_department(connection, department):
 
     refreshed_at = time.time()
     connection.execute(
-        "DELETE FROM bdnb_parcel_dpe WHERE department = ?",
-        (department,),
+        "DELETE FROM bdnb_parcel_dpe WHERE department = ? AND version = ?",
+        (department, BDNB_CACHE_VERSION),
     )
     connection.execute(
         """
@@ -410,13 +414,6 @@ def lookup_bdnb_parcel_data(parcels_by_department):
     return results
 
 
-def lookup_bdnb_parcel_dpe(parcels_by_department):
-    return {
-        parcel_id: parcel_data["dpe"]
-        for parcel_id, parcel_data in lookup_bdnb_parcel_data(parcels_by_department).items()
-    }
-
-
 def distance_in_km(latitude, longitude, other_latitude, other_longitude):
     radians = math.radians
     lat_difference = radians(other_latitude - latitude)
@@ -440,8 +437,19 @@ def percentile(values, fraction):
     return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
 
 
-@lru_cache(maxsize=64)
+class ArchiveNotPublished(Exception):
+    """Raised, and so never cached, while the current year's archive is not yet published."""
+
+
 def load_department_transactions(year, department, latitude, longitude, radius):
+    try:
+        return _load_published_transactions(year, department, latitude, longitude, radius)
+    except ArchiveNotPublished:
+        return None
+
+
+@lru_cache(maxsize=64)
+def _load_published_transactions(year, department, latitude, longitude, radius):
     url = f"{DVF_ARCHIVE}/{year}/departements/{department}.csv.gz"
     request = urllib.request.Request(
         url,
@@ -452,11 +460,11 @@ def load_department_transactions(year, department, latitude, longitude, radius):
             compressed = response.read()
     except urllib.error.HTTPError as error:
         if error.code == 404 and year == datetime.date.today().year:
-            return None
+            raise ArchiveNotPublished from error
         raise RuntimeError(
             f"Le fichier DVF géolocalisé {year} du département {department} est indisponible."
         ) from error
-    except (urllib.error.URLError, TimeoutError) as error:
+    except (urllib.error.URLError, TimeoutError, http.client.HTTPException) as error:
         raise RuntimeError(
             f"Le fichier DVF géolocalisé {year} du département {department} est indisponible."
         ) from error
@@ -598,6 +606,12 @@ def summarize(sales, filters, dpe_class=None, dpe_lookup_limit=MAX_DPE_LOOKUPS):
                 checked_by_department.setdefault(sale["department"], set()).add(sale["parcelId"])
         for department in sorted(checked_by_department):
             ensure_bdnb_department(department)
+        parcel_sample = {
+            "checkedParcels": len(checked_parcels),
+            "eligibleParcels": len(all_parcels),
+            "maximumLookups": min(len(all_parcels), MAX_DPE_LOOKUPS),
+            "version": BDNB_VERSION,
+        }
         parcel_data = lookup_bdnb_parcel_data(
             {
                 department: sorted(parcel_ids)
@@ -610,12 +624,7 @@ def summarize(sales, filters, dpe_class=None, dpe_lookup_limit=MAX_DPE_LOOKUPS):
                 for sale in comparable_sales
                 if parcel_data.get(sale["parcelId"], {}).get("dpe") == dpe_class
             ]
-            dpe_sample = {
-                "checkedParcels": len(checked_parcels),
-                "eligibleParcels": len(all_parcels),
-                "maximumLookups": min(len(all_parcels), MAX_DPE_LOOKUPS),
-                "version": BDNB_VERSION,
-            }
+            dpe_sample = parcel_sample
         if construction_filter_active:
             comparable_sales = [
                 sale
@@ -625,12 +634,7 @@ def summarize(sales, filters, dpe_class=None, dpe_lookup_limit=MAX_DPE_LOOKUPS):
                 and (min_construction_year is None or construction_year >= min_construction_year)
                 and (max_construction_year is None or construction_year <= max_construction_year)
             ]
-            construction_sample = {
-                "checkedParcels": len(checked_parcels),
-                "eligibleParcels": len(all_parcels),
-                "maximumLookups": min(len(all_parcels), MAX_DPE_LOOKUPS),
-                "version": BDNB_VERSION,
-            }
+            construction_sample = parcel_sample
 
     if len(comparable_sales) < MIN_PUBLISHABLE_SALES:
         summary = {
@@ -808,7 +812,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             latitude, longitude, radius, departments, filters, dpe_class, dpe_lookup_limit = parse_query(parsed_url.query)
             archive_jobs = [
                 (year, department)
-                for year in AVAILABLE_YEARS
+                for year in dvf_years()
                 for department in departments
             ]
             archive_results = {}
@@ -828,7 +832,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     archive_results[(year, department)] = future.result()
             available_years = sorted(
                 year
-                for year in AVAILABLE_YEARS
+                for year in dvf_years()
                 if any(archive_results[(year, department)] is not None for department in departments)
             )
             coverage = [
@@ -836,7 +840,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "department": department,
                     "years": [
                         year
-                        for year in AVAILABLE_YEARS
+                        for year in dvf_years()
                         if archive_results[(year, department)] is not None
                     ],
                 }
