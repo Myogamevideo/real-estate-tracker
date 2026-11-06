@@ -29,6 +29,11 @@ const backup = (overrides = {}) => ({
   ...overrides,
 });
 
+test("le profil par défaut ne contient ni prix ni date d'achat", () => {
+  assert.equal(DEFAULT_PROPERTY.purchasePrice, 0);
+  assert.equal(DEFAULT_PROPERTY.purchaseDate, "");
+});
+
 test("normalizeListing corrige statut, DPE et historique de prix", () => {
   const normalized = normalizeListing(listing({ status: "inconnu", energyRating: "Z", createdAt: "2026-01-02" }));
   assert.equal(normalized.status, "À suivre");

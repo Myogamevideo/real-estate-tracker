@@ -189,9 +189,12 @@ class SnapshotFeatureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             site = Path(directory) / "_site"
             generator.prepare_site(site)
-            published = (site / "src" / "main.js").read_text(encoding="utf-8")
-        self.assertNotIn("215000", published)
-        self.assertNotIn("2026-04-27", published)
+            sources = "\n".join(
+                path.read_text(encoding="utf-8") for path in sorted((site / "src").glob("*.js"))
+            )
+        for personal_value in ("215000", "2026-04-27"):
+            self.assertNotIn(personal_value, sources)
+        self.assertRegex(sources, r"purchasePrice: 0,\s+purchaseDate: \"\"")
 
 
 DVF_COLUMNS = (

@@ -354,9 +354,9 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 .legend-sales { margin-left: 3px; background: #d99155; }
 .map-message { position: absolute; z-index: 600; inset: 0; display: grid; place-items: center; padding: 25px; background: #f6f7f3e8; color: #59665e; text-align: center; font-size: 12px; }
 .map-message[hidden] { display: none; }
-.map-footer { display: flex; justify-content: space-between; gap: 8px; padding: 10px 1px 0; color: #76827a; font-size: 9px; }
+.map-footer { display: flex; justify-content: space-between; gap: 8px; padding: 10px 1px 0; color: #67726b; font-size: 9px; }
 .map-footer strong { color: #385f49; }
-.map-method { color: #a0a7a3; }
+.map-method { color: #68716c; }
 
 .lower-grid { align-items: stretch; }
 .subtle-label { padding-top: 4px; color: #67706b; font-size: 9px; }
@@ -367,7 +367,7 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 .town-name strong { overflow: hidden; color: #36423b; font-size: 10px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .town-name span { color: #68706b; font-size: 9px; }
 .town-price { color: #476d55; font-size: 10px; white-space: nowrap; }
-.loading-row, .empty-row { padding: 10px 0; color: #99a19c; font-size: 10px; }
+.loading-row, .empty-row { padding: 10px 0; color: #68706b; font-size: 10px; }
 
 .add-button { width: 29px; height: 29px; display: grid; place-items: center; border: 1px solid #e1e9e2; border-radius: 9px; background: #eff4ef; color: #42634d; font-size: 20px; line-height: 1; }
 .source-notice { display: flex; gap: 8px; margin: 12px 0; padding: 10px 11px; border-radius: 8px; background: #f8f5ef; }
@@ -388,14 +388,14 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 .listing-price strong { color: #46534b; font-size: 10px; white-space: nowrap; }
 .listing-price select { max-width: 128px; min-height: 25px; padding: 0 5px; border: 1px solid #e5e9e4; border-radius: 5px; background: #fff; color: #647168; font-size: 8px; }
 .edit-listing { padding: 2px 0; border: 0; background: transparent; color: #4a7458; font-size: 8px; font-weight: 700; }
-.remove-listing { border: 0; background: transparent; color: #a2aaa5; font-size: 16px; line-height: 1; }
-.listing-details .listing-price-history { color: #7c8b7f; font-size: 8px; }
+.remove-listing { border: 0; background: transparent; color: #67716b; font-size: 16px; line-height: 1; }
+.listing-details .listing-price-history { color: #657368; font-size: 8px; }
 .listing-alerts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
 .listing-alert { padding: 3px 6px; border-radius: 5px; background: #eaf3eb; color: #41694c !important; font-size: 8px !important; font-weight: 700; }
 .listing-alert.price-drop { background: #fff0e7; color: #9c5e3a !important; }
 .listing-match-summary { margin: 0 0 10px; padding: 9px 10px; border-radius: 7px; background: #f1f6f1; color: #4c6854; font-size: 9px; line-height: 1.5; }
 .data-backup-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 13px; padding-top: 10px; border-top: 1px solid #eff1ee; }
-.backup-status { min-height: 12px; margin: 5px 0 0; color: #77877b; font-size: 8px; line-height: 1.4; }
+.backup-status { min-height: 12px; margin: 5px 0 0; color: #657268; font-size: 8px; line-height: 1.4; }
 .text-button { padding: 3px 0; border: 0; background: transparent; color: #4a7458; font-size: 9px; font-weight: 700; }
 .modal-secondary { margin-top: 12px; }
 
@@ -405,11 +405,11 @@ h1 { margin-bottom: 7px; font: 800 clamp(26px, 3vw, 36px)/1.15 Manrope, sans-ser
 .modal { width: min(470px, calc(100vw - 32px)); max-width: none; padding: 0; border: 0; border-radius: 15px; background: transparent; box-shadow: 0 20px 70px #14271a38; }
 .modal::backdrop { background: #1d2b2580; backdrop-filter: blur(2px); }
 .modal-card { position: relative; padding: 25px; border: 1px solid #e7eae5; border-radius: 15px; background: #fff; }
-.modal-close { position: absolute; top: 15px; right: 17px; border: 0; background: transparent; color: #89948d; font-size: 23px; }
-.modal-copy { margin: 8px 0 17px; color: #7c8780; font-size: 11px; line-height: 1.6; }
+.modal-close { position: absolute; top: 15px; right: 17px; border: 0; background: transparent; color: #67716a; font-size: 23px; }
+.modal-copy { margin: 8px 0 17px; color: #67716b; font-size: 11px; line-height: 1.6; }
 .field-label { display: block; margin: 12px 0 6px; color: #56635b; font-size: 10px; font-weight: 600; }
 .modal-card input, .modal-card select { width: 100%; min-height: 39px; padding: 0 10px; border: 1px solid #e2e7e2; border-radius: 7px; background: #fff; color: #344139; font-size: 11px; }
-.modal-card input::placeholder { color: #aab1ac; }
+.modal-card input::placeholder { color: #68716a; }
 .address-row { display: flex; gap: 8px; }
 .address-row input { min-width: 0; flex: 1; }
 .primary-button { min-height: 39px; padding: 0 15px; border: 0; border-radius: 7px; background: #345b46; color: #fff; font-size: 10px; font-weight: 700; }
